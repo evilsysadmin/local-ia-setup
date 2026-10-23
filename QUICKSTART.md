@@ -31,8 +31,17 @@ make browser          # abre la UI de PrismML si Bonsai está listo
 make compose-ps       # también cuando todavía se esté construyendo la imagen
 make compose-logs
 make status
+make llama-status                   # tokens, tok/s, peticiones, contexto y VRAM
+make llama-status TAIL=50           # últimas 50 líneas de Docker
+make llama-status TAIL=50 FOLLOW=1  # logs en tiempo real; Ctrl+C para salir
 make down
 ```
+
+El informe de `make llama-status` no produce una inferencia:
+presenta las métricas de PrismML si `/metrics` está habilitado;
+si el servidor es anterior o no las soporta, avisa sin inventar cifras.
+Los contadores se reinician al arrancar de nuevo. TAIL/FOLLOW solo
+leen logs de **nuestro** Compose y pueden mostrar contenido de peticiones.
 
 Atajo para abrirlo de una sola vez: `make chat` (inicia/reutiliza el
 servidor y abre tu navegador). `make browser` por sí solo no arranca

@@ -99,7 +99,7 @@ case "$cmd" in
     echo "Starting Bonsai: ctx=$BONSAI_CTX slots=$BONSAI_SLOTS gpu_layers=$BONSAI_NGL at $(local_url)"
     cd "$BONSAI_DIR"
     export PORT="$BONSAI_PORT" BONSAI_HOST='127.0.0.1'
-    exec ./scripts/start_llama_server.sh -np "$BONSAI_SLOTS" "$@" ;;
+    exec ./scripts/start_llama_server.sh -np "$BONSAI_SLOTS" --metrics "$@" ;;
   webui)
     [[ "$BONSAI_PORT" == 8080 ]] || fail "Upstream Open WebUI only supports llama on port 8080; set BONSAI_PORT=8080"
     need_bonsai; load_cuda
@@ -140,6 +140,9 @@ case "$cmd" in
   ready) python3 "$ROOT/scripts/local_setup.py" ready "$(local_url)" "$BONSAI_READY_TIMEOUT" ;;
   doctor) python3 "$ROOT/scripts/local_setup.py" doctor "$(local_url)" "$BONSAI_DIR" "$BONSAI_CTX" ;;
   status) python3 "$ROOT/scripts/local_setup.py" status "$(local_url)" ;;
+  llama-status)
+    check_numeric
+    exec python3 "$ROOT/scripts/llama_status.py" "$(local_url)" "$BONSAI_CTX" "$BONSAI_DIR" "${TAIL:-0}" "${FOLLOW:-0}" ;;
   smoke) python3 "$ROOT/scripts/local_setup.py" completion "$(local_url)" 128 ;;
   benchmark) python3 "$ROOT/scripts/local_setup.py" completion "$(local_url)" 768 ;;
   *) fail "Unknown action: $cmd" ;;

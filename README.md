@@ -82,6 +82,9 @@ make arena               Create isolated failing-code challenge
 make arena-check PROJECT=...  Evaluate five tests and detect tampering
 make webui               Launch WebUI with existing backend (won't start a second model)
 make status              Show backend and active GPU compute processes
+make llama-status        Health, model, context, token rates/counters, requests and VRAM
+make llama-status TAIL=50  Include the last 50 Compose log lines
+make llama-status TAIL=50 FOLLOW=1  Follow logs live (Ctrl+C stops following)
 make ready               Wait for /health=ok and valid /v1/models before returning
 make smoke               Local API short completion
 make benchmark           Wall-clock timing for a larger completion
@@ -166,6 +169,37 @@ Para el uso web sin OpenCode: `make chat` ejecuta `make up` y abre
 el navegador predeterminado. `make browser` solo abre la UI cuando
 Bonsai ya está listo, sin lanzar procesos nuevos; si no está disponible
 te recomienda iniciar el servidor. Respeta `BONSAI_PORT` y localhost.
+
+## Diagnóstico de rendimiento: llama-status
+
+```bash
+make llama-status                      # solo métricas, no genera tokens
+make llama-status TAIL=50              # añade las últimas 50 líneas de Compose
+make llama-status TAIL=50 FOLLOW=1     # sigue los logs en directo; Ctrl+C sale
+```
+
+Consulta únicamente endpoints localhost de lectura: `/health`,
+`/v1/models`, `/props` y `/metrics`, además de `nvidia-smi` local.
+Expone **peticiones activas/en cola**, tokens de prompt/generación
+acumulados desde el arranque, throughput reportado de prompt/generación,
+uso KV si existe y VRAM del host. Los indicadores dependen de lo que
+publique esa versión del servidor; las velocidades son **gauges del
+servidor**, no una prueba de rendimiento nueva ni instantánea cuando
+está inactivo. No se hace petición de inferencia ni se leen los prompts
+desde `/slots`. La VRAM incluye otros procesos GPU.
+
+Los nuevos arranques de `make up` (Compose) y `make server` (nativo,
+incluido `systemd --user`) pasan `--metrics` al launcher de PrismML,
+compatible con llama.cpp. Si estás reutilizando un servidor anterior
+que no expone `/metrics`, aparecerá `Metrics: unavailable`, sin
+interrumpir el informe; reiniciar un servidor **gestionado** con el
+comando apropiado habilitará las métricas, pero reiniciar borra
+los contadores acumulados. Los datos se publican **solo en localhost**.
+La lectura de logs es optativa porque los logs pueden contener texto
+de tus peticiones; solo se consultan si indicas `TAIL` o `FOLLOW`.
+Los logs corresponden exclusivamente al contenedor Compose que
+pertenece a este repo (para modo nativo usa `make service-logs`).
+Límites: `TAIL=0..1000`, `FOLLOW=0|1`.
 
 ## OpenCode en cualquier proyecto
 

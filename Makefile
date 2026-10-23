@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down browser chat gpu-check compose-logs compose-ps native-up native-down status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down browser chat gpu-check compose-logs compose-ps native-up native-down status llama-status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -74,6 +74,9 @@ native-down: ## Optional fallback: stop only the managed systemd --user unit
 status: ## Quick API and GPU status
 	@./scripts/local-ia status
 
+llama-status: ## Llama metrics + optional logs: TAIL=50 FOLLOW=1
+	@./scripts/local-ia llama-status
+
 ready: ## Wait up to BONSAI_READY_TIMEOUT for model readiness (not just process startup)
 	@./scripts/local-ia ready
 
@@ -119,5 +122,5 @@ publish: verify ## Create evilsysadmin/local-ia-setup on GitHub (private by defa
 
 verify: test ## Local static validation
 	@bash -n scripts/local-ia scripts/publish.sh
-	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py scripts/agent_launcher.py scripts/arena.py scripts/lifecycle.py scripts/compose_lifecycle.py scripts/browser.py
+	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py scripts/agent_launcher.py scripts/arena.py scripts/lifecycle.py scripts/compose_lifecycle.py scripts/browser.py scripts/llama_status.py
 	@echo 'Static checks: OK'

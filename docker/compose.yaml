@@ -26,7 +26,7 @@ services:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
     entrypoint: ["/bin/sh", "/bonsai/scripts/start_llama_server.sh"]
-    command: ["-np", "${BONSAI_SLOTS:-1}"]
+    command: ["-np", "${BONSAI_SLOTS:-1}", "--metrics"]
     volumes:
       - type: bind
         source: "${BONSAI_DIR:-${HOME:?HOME is required}/Apps/Bonsai-demo}"
