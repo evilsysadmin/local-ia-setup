@@ -32,6 +32,7 @@ make browser          # abre la UI de PrismML si Bonsai está listo
 make compose-ps       # también cuando todavía se esté construyendo la imagen
 make compose-logs
 make status
+make compaction-check              # inspecciona resumen 12K y modelo actual (sin tokens)
 make llama-status                   # tokens, tok/s, peticiones, contexto y VRAM
 make llama-status TAIL=50           # últimas 50 líneas de Docker
 make llama-status TAIL=50 FOLLOW=1  # logs en tiempo real; Ctrl+C para salir
