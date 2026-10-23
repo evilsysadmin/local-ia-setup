@@ -29,7 +29,7 @@ services:
     command: ["-np", "${BONSAI_SLOTS:-1}"]
     volumes:
       - type: bind
-        source: "${BONSAI_DIR:?Set BONSAI_DIR to the existing Bonsai-demo checkout}"
+        source: "${BONSAI_DIR:-${HOME:?HOME is required}/Apps/Bonsai-demo}"
         target: /bonsai
         read_only: true
         bind:

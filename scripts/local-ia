@@ -117,10 +117,11 @@ case "$cmd" in
     health || fail 'Backend not ready; run make server first'
     exec opencode "$@" ;;
   browser) exec python3 "$ROOT/scripts/browser.py" "$(local_url)" ;;
-  up|down|compose-logs|gpu-check)
+  up|down|compose-logs|compose-ps|gpu-check)
     check_numeric
     mode="$cmd"
     [[ "$cmd" == compose-logs ]] && mode=logs
+    [[ "$cmd" == compose-ps ]] && mode=ps
     exec python3 "$ROOT/scripts/compose_lifecycle.py" "$mode" "$(local_url)" "$BONSAI_CTX" "$BONSAI_READY_TIMEOUT" "$BONSAI_DIR" ;;
   native-up|native-down)
     check_numeric

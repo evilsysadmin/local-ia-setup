@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down browser chat gpu-check compose-logs native-up native-down status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down browser chat gpu-check compose-logs compose-ps native-up native-down status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -58,6 +58,9 @@ down: ## Stop only our Docker Compose stack (never kill a manual server)
 
 gpu-check: ## Check NVIDIA GPU access INSIDE Docker (downloads CUDA probe image if needed)
 	@./scripts/local-ia gpu-check
+
+compose-ps: ## Show status of Bonsai's Compose container (no env exports needed)
+	@./scripts/local-ia compose-ps
 
 compose-logs: ## Last 100 log lines from our Bonsai Compose container
 	@./scripts/local-ia compose-logs
