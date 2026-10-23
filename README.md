@@ -1,5 +1,7 @@
 # local-ia-setup 🌳
 
+> **🚀 Start here:** [QUICKSTART.md](QUICKSTART.md) — existing Nobara installation, clean install, OpenCode, and optional systemd user service.
+
 Reproducible, **local-only** AI coding workstation for Nobara/Fedora, NVIDIA Blackwell GPU and **PrismML Bonsai 2 27B PQ2_0** with OpenCode V2 and optional Open WebUI.
 
 **Tested live by owner in the conversation:** Nobara + MSI Vector AI HX, GeForce RTX 5070 Ti Laptop (12 GB VRAM), 32 GB RAM, NVIDIA 595.104.02, Bonsai 2 27B PQ2_0, CUDA 12 runtime. ~45–50 generated tokens/s were observed with 8K context on this machine. Those observations are **not an automated acceptance test** and should not be assumed for 32K context.
@@ -8,7 +10,7 @@ This repository contains no models, secrets, UI conversations or Nvidia drivers.
 
 ## Day-to-day use (existing installation)
 
-Extract the provided source archive into a standalone `local-ia-setup/` directory. After publication, you can alternatively clone `https://github.com/evilsysadmin/local-ia-setup.git`.
+Clone the [published repository](https://github.com/evilsysadmin/local-ia-setup.git) or update your checkout with `git pull --ff-only`. For the shortest setup and start/stop commands, use the [Quickstart](QUICKSTART.md).
 
 ```bash
 cd local-ia-setup
@@ -151,17 +153,9 @@ startup (not copied into the unit); restart after modifications.
 - 12GB VRAM is finite: don't load full model plus Blender Cycles / ComfyUI at peak simultaneously.
 - If `opencode` points to missing `/usr/bin/opencode` after a new install, run `hash -r` or open a fresh shell; review `type -a opencode`.
 
-## Publishing to GitHub
+## Repository workflow
 
-The ChatGPT GitHub connector currently cannot create new repositories. On your own Nobara, after extracting this project in a standalone directory:
-
-```bash
-make verify
-make publish                  # creates evilsysadmin/local-ia-setup PRIVATE by default
-# or: VISIBILITY=public make publish
-```
-
-The script stages only the explicitly listed source files, initializes the repo if necessary, commits, and calls `gh repo create ... --source=. --push`. It does not add your `.env`, weights, cache or credentials. Do not run it inside another Git worktree.
+This project is already published at [evilsysadmin/local-ia-setup](https://github.com/evilsysadmin/local-ia-setup). Use `git clone` once and `git pull --ff-only` to update. The `make publish` target is a legacy **first-time repository creation helper**, not an update command: it refuses to overwrite an existing GitHub repository. For future changes, use normal Git branches and pull requests.
 
 This is a **reproducible setup process**, not yet a bit-for-bit locked build: the upstream PrismML demo and V2 installer may advance. For a regulated/immutable build, pin the upstream commit and CLI versions after validating them on the target GPU.
 
