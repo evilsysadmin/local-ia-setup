@@ -15,7 +15,8 @@ class QuickstartDocsTests(unittest.TestCase):
         mk = (ROOT / "Makefile").read_text(encoding="utf-8")
         targets = set(re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*):", mk, re.MULTILINE))
         qs = (ROOT / "QUICKSTART.md").read_text(encoding="utf-8")
-        commands = re.findall(r"\bmake\s+([a-z][a-z0-9_-]*)", qs)
+        commands = re.findall(r"(?m)^\s*make\s+([a-z][a-z0-9_-]*)\b", qs)
+        commands += re.findall(r"`make\s+([a-z][a-z0-9_-]*)\b", qs)
         self.assertTrue(commands, "No Makefile invocations found in Quickstart")
         self.assertEqual([], sorted(set(commands) - targets))
 
