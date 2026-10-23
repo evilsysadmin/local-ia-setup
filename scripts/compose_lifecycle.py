@@ -21,6 +21,7 @@ SERVICE = "bonsai"
 LABEL = "io.github.evilsysadmin.local-ia-setup.component"
 LABEL_VALUE = "bonsai-prisml"
 COMPOSE = Path(__file__).resolve().parent.parent / "docker" / "compose.yaml"
+GPU_TEST_IMAGE = "nvidia/cuda:12.8.1-base-ubuntu24.04"
 
 
 def call(args: list[str], timeout: int = 30) -> str:
@@ -47,6 +48,39 @@ def docker_available() -> None:
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError(f"Docker Compose/daemon unavailable: {exc}. "
                            "Also install NVIDIA Container Toolkit for GPU access.") from exc
+
+
+def gpu_check() -> str:
+    """Exercise NVIDIA Container Toolkit in a disposable GPU container.
+
+    This proves Docker can see an NVIDIA GPU; it is NOT a PrismML inference
+    test. The image may be downloaded on first use. Nothing is installed
+    on the host and there are no model mounts or privileged flags.
+    """
+    docker_available()
+    cmd = [
+        "docker", "run", "--rm", "--gpus", "all", "--pull=missing",
+        GPU_TEST_IMAGE, "nvidia-smi",
+        "--query-gpu=index,name,memory.total", "--format=csv,noheader",
+    ]
+    try:
+        output = call(cmd, timeout=240)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(
+            f"NVIDIA GPU unavailable inside Docker: {exc}. "
+            "Check NVIDIA Container Toolkit, Docker's GPU runtime and "
+            "the host driver. See NVIDIA's container-toolkit documentation. "
+            "No drivers or daemon configuration were changed."
+        ) from exc
+    if not output.strip():
+        raise RuntimeError(
+            "Docker's NVIDIA probe succeeded but nvidia-smi reported no GPUs. "
+            "Check NVIDIA Container Toolkit and the host driver."
+        )
+    print("PASS: NVIDIA GPU visible from an ephemeral Docker container.", flush=True)
+    for line in output.splitlines():
+        print(f"  {line}", flush=True)
+    return output
 
 
 def existing_container(demo_dir: Path) -> str | None:
@@ -115,6 +149,7 @@ def up(base: str, context: int, timeout: float, demo_dir: Path) -> str:
                 "No container started. Inspect ps/ss/logs, then stop the old "
                 "process explicitly; this repository never kills foreign PIDs.")
     check_demo(demo_dir)
+    gpu_check()  # Fail early with an actionable GPU error before loading the model.
     try:
         compose("up", "-d", "--build", "--no-deps", SERVICE, timeout=600)
         if not existing_container(demo_dir):
@@ -149,11 +184,13 @@ def logs(demo_dir: Path) -> None:
 
 def main(argv: list[str]) -> None:
     if len(argv) != 5:
-        raise ValueError("Usage: compose_lifecycle.py {up|down|logs} URL CTX TIMEOUT BONSAI_DIR")
+        raise ValueError("Usage: compose_lifecycle.py {up|down|logs|gpu-check} URL CTX TIMEOUT BONSAI_DIR")
     command, base, context, timeout, demo = argv
     demo_dir = Path(demo)
     if command == "up":
         up(base, int(context), float(timeout), demo_dir)
+    elif command == "gpu-check":
+        gpu_check()
     elif command == "down":
         down(base, demo_dir)
     elif command == "logs":

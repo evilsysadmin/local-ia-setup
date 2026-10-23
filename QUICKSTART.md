@@ -7,14 +7,14 @@ Bonsai 2 27B PQ2_0 + CUDA + OpenCode V2 on **Nobara/Fedora**. Commands below run
 ## A. Bonsai ya instalado: Docker Compose
 
 Necesitas Docker Engine, Docker Compose v2 y el NVIDIA Container Toolkit.
-Antes del primer arranque verifica que Docker puede usar la GPU:
+Antes del primer arranque verifica que Docker puede usar la GPU desde el checkout:
 
 ```bash
-docker compose version
-docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+cd ~/Documents/repos/evilsysadmin/local-ia-setup
+make gpu-check
 ```
 
-Con eso listo, desde el checkout:
+Con eso listo, desde el checkout (y el repo ya clonado):
 
 ```bash
 cd ~/Documents/repos/evilsysadmin/local-ia-setup
@@ -36,6 +36,12 @@ El contenedor usa el GGUF, binario CUDA y scripts de
 `~/Apps/Bonsai-demo` mediante **montaje de solo lectura**. La imagen
 contiene CUDA, pero no copia ni vuelve a descargar el modelo. El puerto
 8080 solo se publica en `127.0.0.1`. No hay autostart al iniciar sesión.
+
+El `make gpu-check` crea un contenedor efímero, muestra GPU/VRAM y
+puede descargar la imagen CUDA de prueba una sola vez. `make up`
+comprueba la GPU antes de iniciar un contenedor nuevo y falla pronto
+si NVIDIA Container Toolkit no funciona. CI solo prueba el código
+de este check, no ejecuta la GPU real.
 
 Si `make up` detecta un `llama-server` huérfano (como el PID 350930),
 se negará a iniciar otro modelo para no consumir doble VRAM. No mata

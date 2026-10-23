@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down compose-logs native-up native-down status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down gpu-check compose-logs native-up native-down status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -48,6 +48,9 @@ up: ## Start PrismML CUDA in Docker Compose (or reuse an existing local Bonsai)
 
 down: ## Stop only our Docker Compose stack (never kill a manual server)
 	@./scripts/local-ia down
+
+gpu-check: ## Check NVIDIA GPU access INSIDE Docker (downloads CUDA probe image if needed)
+	@./scripts/local-ia gpu-check
 
 compose-logs: ## Last 100 log lines from our Bonsai Compose container
 	@./scripts/local-ia compose-logs
