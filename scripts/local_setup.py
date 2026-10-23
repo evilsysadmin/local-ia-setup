@@ -328,9 +328,14 @@ def fix_compaction(path: Path | None = None) -> str:
         raise ValueError("Invalid existing compaction.buffer")
     required = recommended_compaction_buffer(context, output, keep)
     old_buffer = buffer
+    original = json.dumps(cfg, sort_keys=True)
     if buffer < required:
         cfg["compaction"]["buffer"] = required
     configure_summary_model(cfg)
+    if json.dumps(cfg, sort_keys=True) == original:
+        print("Compaction buffer and dedicated summary output model already configured.")
+        print("No files or sessions changed.")
+        return "Unchanged"
     state = write_config(cfg, path)
     if state == "Written":
         print(f"Fixed compaction buffer: {old_buffer} -> {cfg['compaction']['buffer']}")
