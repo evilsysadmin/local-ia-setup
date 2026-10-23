@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode status smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -33,6 +33,9 @@ opencode: ## Start OpenCode with configured local provider
 
 status: ## Quick API and GPU status
 	@./scripts/local-ia status
+
+ready: ## Wait up to BONSAI_READY_TIMEOUT for model readiness (not just process startup)
+	@./scripts/local-ia ready
 
 smoke: ## Check API and run a short completion (requires running server)
 	@./scripts/local-ia smoke

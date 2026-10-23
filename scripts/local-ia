@@ -13,9 +13,10 @@ BONSAI_MMPROJ_CPU="${BONSAI_MMPROJ_CPU:-1}"
 BONSAI_PORT="${BONSAI_PORT:-8080}"
 BONSAI_SLOTS="${BONSAI_SLOTS:-1}"
 BONSAI_OUTPUT="${BONSAI_OUTPUT:-4096}"
+BONSAI_READY_TIMEOUT="${BONSAI_READY_TIMEOUT:-120}"
 OPENCODE_KEEP="${OPENCODE_KEEP:-2048}"
 OPENCODE_BUFFER="${OPENCODE_BUFFER:-4096}"
-export BONSAI_DIR BONSAI_CTX BONSAI_NGL BONSAI_MMPROJ_CPU BONSAI_PORT BONSAI_SLOTS BONSAI_OUTPUT OPENCODE_KEEP OPENCODE_BUFFER
+export BONSAI_DIR BONSAI_CTX BONSAI_NGL BONSAI_MMPROJ_CPU BONSAI_PORT BONSAI_SLOTS BONSAI_OUTPUT BONSAI_READY_TIMEOUT OPENCODE_KEEP OPENCODE_BUFFER
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 need_bonsai() {
@@ -115,7 +116,12 @@ case "$cmd" in
     [[ "$(opencode --version)" =~ (^|[[:space:]])2[.] ]] || fail 'This configuration requires OpenCode V2'
     health || fail 'Backend not ready; run make server first'
     exec opencode "$@" ;;
+  service-start|service-restart|service-enable)
+    python3 "$ROOT/scripts/user_service.py" "${cmd#service-}"
+    python3 "$ROOT/scripts/local_setup.py" ready "$(local_url)" "$BONSAI_READY_TIMEOUT"
+    systemctl --user is-active --quiet local-ia-bonsai.service || fail 'Unit is not active after readiness; check make service-logs' ;;
   service-*) python3 "$ROOT/scripts/user_service.py" "${cmd#service-}" ;;
+  ready) python3 "$ROOT/scripts/local_setup.py" ready "$(local_url)" "$BONSAI_READY_TIMEOUT" ;;
   doctor) python3 "$ROOT/scripts/local_setup.py" doctor "$(local_url)" "$BONSAI_DIR" "$BONSAI_CTX" ;;
   status) python3 "$ROOT/scripts/local_setup.py" status "$(local_url)" ;;
   smoke) python3 "$ROOT/scripts/local_setup.py" completion "$(local_url)" 128 ;;

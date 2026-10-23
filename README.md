@@ -67,10 +67,11 @@ make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/mo
 make opencode            Start OpenCode (starts in the make working directory)
 make webui               Launch WebUI with existing backend (won't start a second model)
 make status              Show backend and active GPU compute processes
+make ready               Wait for /health=ok and valid /v1/models before returning
 make smoke               Local API short completion
 make benchmark           Wall-clock timing for a larger completion
 make service-install     Generate optional user systemd service (no autostart)
-make service-start       Start background Bonsai server via systemd
+make service-start       Start background Bonsai server; wait for model readiness
 make service-stop        Stop background Bonsai server
 make service-status      Show user service status
 make service-logs        Show journal logs
@@ -86,12 +87,14 @@ make publish             GitHub creation (private by default, requires gh CLI)
 To keep Bonsai running without a terminal, install a **user-scoped** unit. It
 uses the same `scripts/local-ia server` launcher, so CUDA paths, model and `.env`
 settings remain identical to `make server`. **Installing does not start or
-activate autostart**:
+activate autostart**. Starting/restarting the unit now waits until both `/health`
+reports `ok` and `/v1/models` is populated, or fails with a bounded timeout:
 
 ```bash
 make service-install     # install ~/.config/systemd/user/local-ia-bonsai.service
 make service-start       # launch now; requires no foreground terminal
-make service-status      # systemd status (startup does not imply inference-ready)
+make service-status      # systemd status
+make ready               # wait for /health status=ok + valid model ID
 make status              # check /health and GPU process after model loads
 make service-logs        # last 100 journal lines
 make service-stop
@@ -130,6 +133,7 @@ startup (not copied into the unit); restart after modifications.
 | `BONSAI_MMPROJ_CPU` | `1` | Save VRAM by putting vision projector in RAM |
 | `BONSAI_PORT` | `8080` | Loopback API port |
 | `BONSAI_OUTPUT` | `4096` | Model output allowance in OpenCode |
+| `BONSAI_READY_TIMEOUT` | `120` | Max seconds for `make ready` and service start/restart/enable |
 | `OPENCODE_KEEP` | `2048` | Recent tokens retained in compaction |
 | `OPENCODE_BUFFER` | `4096` | Token buffer; avoid V2 default 16K minimum |
 
@@ -178,7 +182,7 @@ This is a **reproducible setup process**, not yet a bit-for-bit locked build: th
 - Document / RAG ingestion with strict project-level isolation; embeddings store not bundled here.
 - Persistent memory strategy / backups (Open WebUI DB vs operational project memory).
 - MCP + sandboxed Blender asset worker with controlled GPU scheduling.
-- Readiness-aware systemd startup and structured health metrics.
+- Structured health metrics and GPU-backed readiness verification beyond API health.
 
 ## References
 
