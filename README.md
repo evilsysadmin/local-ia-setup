@@ -67,6 +67,8 @@ make install-opencode    Install OpenCode V2
 make server              Load CUDA runpaths and launch PrismML llama-server
 make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/models
 make opencode            Start OpenCode (starts in the make working directory)
+make agent PROJECT=...    Analyze an existing Git repo using local Bonsai + Plan
+make agent-build PROJECT=...  Edit in a clean feature branch with local Bonsai + Build
 make webui               Launch WebUI with existing backend (won't start a second model)
 make status              Show backend and active GPU compute processes
 make ready               Wait for /health=ok and valid /v1/models before returning
@@ -83,6 +85,17 @@ make service-uninstall   Safely remove generated user service
 make verify              Unit tests and syntax checks
 make publish             GitHub creation (private by default, requires gh CLI)
 ```
+
+## OpenCode en cualquier proyecto
+
+`make agent PROJECT=/ruta/al/repositorio` comprueba que la API local y el
+modelo configurado coinciden y abre OpenCode directamente en ese repo con
+el agente **Plan**. Para editar, `make agent-build PROJECT=/ruta/al/repositorio`
+exige una rama feature limpia (no `main`, `master`, `trunk` ni `production`).
+Revisa los detalles en el [Quickstart](QUICKSTART.md#c-trabajar-en-un-repositorio-con-el-agente-local).
+
+No es un sandbox; las comprobaciones ocurren antes de iniciar OpenCode y las
+configuraciones locales de cada proyecto pueden alterar permisos o plugins.
 
 ## Optional systemd user service (no sudo)
 

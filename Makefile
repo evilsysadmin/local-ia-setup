@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -28,8 +28,14 @@ server: ## Start Bonsai foreground, CUDA, single slot; Ctrl+C to stop
 webui: ## Launch Open WebUI using already-running Bonsai
 	@./scripts/local-ia webui
 
-opencode: ## Start OpenCode with configured local provider
+opencode: ## Start OpenCode from this checkout (legacy low-level command)
 	@./scripts/local-ia opencode
+
+agent: ## Open Bonsai Plan in a project: make agent PROJECT=/path/to/repo
+	@./scripts/local-ia agent
+
+agent-build: ## Open Bonsai Build (requires clean feature branch)
+	@./scripts/local-ia agent-build
 
 status: ## Quick API and GPU status
 	@./scripts/local-ia status
@@ -79,5 +85,5 @@ publish: verify ## Create evilsysadmin/local-ia-setup on GitHub (private by defa
 
 verify: test ## Local static validation
 	@bash -n scripts/local-ia scripts/publish.sh
-	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py
+	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py scripts/agent_launcher.py
 	@echo 'Static checks: OK'

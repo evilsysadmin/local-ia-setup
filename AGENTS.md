@@ -12,3 +12,4 @@ This repo is a **reproducible local workstation setup**, not the PrismML upstrea
 - `git push`, shell execution and edits by coding agents require controlled permissions; approvals do not replace isolation.
 - Prefer Python standard library and Bash; keep configuration comprehensible and idempotent.
 - The `systemd --user` unit is optional and manual by default: no enable, linger, sudo, or changes to global units without an explicit user command.
+- The `agent` command defaults to OpenCode Plan; `agent-build` must reject protected branches and dirty worktrees. Never silently stash, reset, create branches, modify agent credentials, or autoapprove tool calls.
