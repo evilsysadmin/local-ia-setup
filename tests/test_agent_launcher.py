@@ -80,7 +80,7 @@ class AgentLauncherTests(unittest.TestCase):
             with patch.object(agent, "resolve_project", return_value=root), \
                  patch.object(agent, "check_worktree", return_value=("main", 0)), \
                  patch.object(agent.local_setup, "opencode_v2_installed", return_value=True), \
-                 patch.object(agent.lifecycle, "up", return_value="started") as start, \
+                 patch.object(agent.compose_lifecycle, "up", return_value="started") as start, \
                  patch.object(agent, "preflight", return_value=root), \
                  patch.object(agent.os, "execvp", side_effect=RuntimeError("exec intercepted")):
                 with patch.dict("os.environ", {"PROJECT": str(root), "BONSAI_READY_TIMEOUT": "20",
@@ -95,7 +95,7 @@ class AgentLauncherTests(unittest.TestCase):
             with patch.object(agent, "resolve_project", return_value=root), \
                  patch.object(agent, "check_worktree", return_value=("main", 0)), \
                  patch.object(agent.local_setup, "opencode_v2_installed", return_value=False), \
-                 patch.object(agent.lifecycle, "up") as start:
+                 patch.object(agent.compose_lifecycle, "up") as start:
                 with patch.dict("os.environ", {"PROJECT": str(root)}):
                     with self.assertRaisesRegex(RuntimeError, "OpenCode V2 not found"):
                         agent.main(["plan", "http://127.0.0.1:8080", "32768"])

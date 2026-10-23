@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 import local_setup
-import lifecycle
+import compose_lifecycle
 
 MODEL = "bonsai-local/bonsai"
 PROTECTED = frozenset({"main", "master", "trunk", "production"})
@@ -115,7 +115,7 @@ def main(argv: list[str]) -> None:
     check_worktree(root, mode)
     if not local_setup.opencode_v2_installed():
         raise RuntimeError("OpenCode V2 not found. Check PATH/version or run make install-opencode")
-    lifecycle.up(url, int(context), float(os.environ.get("BONSAI_READY_TIMEOUT", "120")),
+    compose_lifecycle.up(url, int(context), float(os.environ.get("BONSAI_READY_TIMEOUT", "120")),
                  Path(os.environ.get("BONSAI_DIR", str(Path.home() / "Apps/Bonsai-demo"))))
     root = preflight(project, mode, url, int(context))
     os.chdir(root)
