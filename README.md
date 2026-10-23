@@ -69,9 +69,53 @@ make webui               Launch WebUI with existing backend (won't start a secon
 make status              Show backend and active GPU compute processes
 make smoke               Local API short completion
 make benchmark           Wall-clock timing for a larger completion
+make service-install     Generate optional user systemd service (no autostart)
+make service-start       Start background Bonsai server via systemd
+make service-stop        Stop background Bonsai server
+make service-status      Show user service status
+make service-logs        Show journal logs
+make service-enable      Opt in to login autostart
+make service-disable     Stop and disable login autostart
+make service-uninstall   Safely remove generated user service
 make verify              Unit tests and syntax checks
 make publish             GitHub creation (private by default, requires gh CLI)
 ```
+
+## Optional systemd user service (no sudo)
+
+To keep Bonsai running without a terminal, install a **user-scoped** unit. It
+uses the same `scripts/local-ia server` launcher, so CUDA paths, model and `.env`
+settings remain identical to `make server`. **Installing does not start or
+activate autostart**:
+
+```bash
+make service-install     # install ~/.config/systemd/user/local-ia-bonsai.service
+make service-start       # launch now; requires no foreground terminal
+make service-status      # systemd status (startup does not imply inference-ready)
+make status              # check /health and GPU process after model loads
+make service-logs        # last 100 journal lines
+make service-stop
+```
+
+Autostart on user login is **opt-in**. Enable it explicitly, only after the
+manual start and `make smoke` work:
+
+```bash
+make service-enable      # enables on login and starts immediately
+make service-disable     # disables on login and stops it
+make service-uninstall   # disables, stops, removes unit and daemon-reloads
+```
+
+The generator refuses to overwrite unrelated units and never uses `sudo` or
+`loginctl enable-linger`. As usual for a systemd user unit, **logging out may
+stop the service** unless the host has user lingering enabled; this setup does
+not change that setting. A `make service-install` after moving the checkout
+regenerates its absolute path; restart the service afterward if needed.
+
+Do not start `make server` at the same time as the service: both use the same
+port. Unit logs go to the user journal; model weights, UI state, credentials,
+`.env` and caches remain outside Git. Settings in `.env` are read at service
+startup (not copied into the unit); restart after modifications.
 
 ## Configuration
 
@@ -134,7 +178,7 @@ This is a **reproducible setup process**, not yet a bit-for-bit locked build: th
 - Document / RAG ingestion with strict project-level isolation; embeddings store not bundled here.
 - Persistent memory strategy / backups (Open WebUI DB vs operational project memory).
 - MCP + sandboxed Blender asset worker with controlled GPU scheduling.
-- Optional systemd --user service, healthchecks and logs.
+- Readiness-aware systemd startup and structured health metrics.
 
 ## References
 

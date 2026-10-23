@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode status smoke benchmark test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode status smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -40,6 +40,34 @@ smoke: ## Check API and run a short completion (requires running server)
 benchmark: ## Run one repeatable timed completion; no claims about GPU rate
 	@./scripts/local-ia benchmark
 
+
+service-install: ## Install optional systemd --user Bonsai unit (does not start/enable)
+	@./scripts/local-ia service-install
+
+service-start: ## Start user service (manual, no login autostart)
+	@./scripts/local-ia service-start
+
+service-stop: ## Stop user service
+	@./scripts/local-ia service-stop
+
+service-restart: ## Restart user service after changing .env or code
+	@./scripts/local-ia service-restart
+
+service-enable: ## Enable service at login AND start now (explicit opt-in)
+	@./scripts/local-ia service-enable
+
+service-disable: ## Disable login autostart and stop service
+	@./scripts/local-ia service-disable
+
+service-status: ## Inspect systemd --user service state
+	@./scripts/local-ia service-status
+
+service-logs: ## Last 100 Bonsai service journal lines
+	@./scripts/local-ia service-logs
+
+service-uninstall: ## Disable, stop and remove only our generated service
+	@./scripts/local-ia service-uninstall
+
 test: ## Pure standard-library unit tests
 	@python3 -m unittest discover -s tests -v
 
@@ -48,5 +76,5 @@ publish: verify ## Create evilsysadmin/local-ia-setup on GitHub (private by defa
 
 verify: test ## Local static validation
 	@bash -n scripts/local-ia scripts/publish.sh
-	@python3 -m py_compile scripts/local_setup.py
+	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py
 	@echo 'Static checks: OK'
