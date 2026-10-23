@@ -48,10 +48,12 @@ class ComposeLifecycleTests(unittest.TestCase):
              patch.object(ctl, "existing_container", side_effect=[None, "container-id"]), \
              patch.object(ctl.lifecycle, "matching_bonsai_pids", return_value=[]), \
              patch.object(ctl, "check_demo"), \
+             patch.object(ctl, "gpu_check") as gpu, \
              patch.object(ctl, "compose") as docker, \
              patch.object(ctl.lifecycle, "verify_ready") as ready:
             self.assertEqual(ctl.up(self.BASE, 32768, 120, self.DEMO), "started")
             docker.assert_called_once_with("up", "-d", "--build", "--no-deps", "bonsai", timeout=600)
+            gpu.assert_called_once_with()
             ready.assert_called_once_with(self.BASE, 32768, 120)
 
     def test_down_without_owned_container_is_noop(self):
@@ -93,6 +95,65 @@ class ComposeLifecycleTests(unittest.TestCase):
              patch.object(ctl, "call", return_value=json.dumps(good)):
             with self.assertRaisesRegex(RuntimeError, "Refusing"):
                 ctl.existing_container(self.DEMO)
+
+
+    def test_gpu_check_runs_disposable_nvidia_container(self):
+        output = "0, NVIDIA RTX, 12288 MiB"
+        with patch.object(ctl, "docker_available") as docker, \
+             patch.object(ctl, "call", return_value=output) as call:
+            self.assertEqual(ctl.gpu_check(), output)
+            docker.assert_called_once_with()
+            args, kwargs = call.call_args
+            self.assertEqual(
+                args[0],
+                ["docker", "run", "--rm", "--gpus", "all", "--pull=missing",
+                 ctl.GPU_TEST_IMAGE, "nvidia-smi",
+                 "--query-gpu=index,name,memory.total", "--format=csv,noheader"],
+            )
+            self.assertEqual(kwargs, {"timeout": 240})
+            self.assertNotIn("--privileged", args[0])
+            self.assertNotIn("-v", args[0])
+
+    def test_gpu_check_fails_when_container_cannot_see_gpu(self):
+        with patch.object(ctl, "docker_available"), \
+             patch.object(ctl, "call", side_effect=RuntimeError("no compatible GPU runtime")):
+            with self.assertRaisesRegex(RuntimeError, "NVIDIA Container Toolkit"):
+                ctl.gpu_check()
+
+    def test_gpu_check_fails_on_empty_nvidia_smi(self):
+        with patch.object(ctl, "docker_available"), \
+             patch.object(ctl, "call", return_value="  "):
+            with self.assertRaisesRegex(RuntimeError, "reported no GPUs"):
+                ctl.gpu_check()
+
+    def test_new_compose_launch_refuses_when_gpu_probe_fails(self):
+        with patch.object(ctl.lifecycle, "listener_present", return_value=False), \
+             patch.object(ctl.lifecycle, "managed_active", return_value=False), \
+             patch.object(ctl, "docker_available"), \
+             patch.object(ctl, "existing_container", return_value=None), \
+             patch.object(ctl.lifecycle, "matching_bonsai_pids", return_value=[]), \
+             patch.object(ctl, "check_demo"), \
+             patch.object(ctl, "gpu_check", side_effect=RuntimeError("NVIDIA Container Toolkit")), \
+             patch.object(ctl, "compose") as compose:
+            with self.assertRaisesRegex(RuntimeError, "NVIDIA Container Toolkit"):
+                ctl.up(self.BASE, 32768, 120, self.DEMO)
+            compose.assert_not_called()
+
+    def test_orphan_blocks_gpu_image_pull(self):
+        with patch.object(ctl.lifecycle, "listener_present", return_value=False), \
+             patch.object(ctl.lifecycle, "managed_active", return_value=False), \
+             patch.object(ctl, "docker_available"), \
+             patch.object(ctl, "existing_container", return_value=None), \
+             patch.object(ctl.lifecycle, "matching_bonsai_pids", return_value=[350930]), \
+             patch.object(ctl, "gpu_check") as gpu:
+            with self.assertRaisesRegex(RuntimeError, "350930"):
+                ctl.up(self.BASE, 32768, 120, self.DEMO)
+            gpu.assert_not_called()
+
+    def test_probe_image_matches_cuda_runtime_major_minor(self):
+        dockerfile = (ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04", dockerfile)
+        self.assertEqual(ctl.GPU_TEST_IMAGE, "nvidia/cuda:12.8.1-base-ubuntu24.04")
 
     def test_docker_preflight_rejects_missing_cli(self):
         with patch.object(ctl.shutil, "which", return_value=None):

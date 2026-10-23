@@ -67,6 +67,7 @@ make install-opencode    Install OpenCode V2
 make server              Load CUDA runpaths and launch PrismML llama-server
 make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/models
 make opencode            Start OpenCode (starts in the make working directory)
+make gpu-check           Run a disposable NVIDIA CUDA container to verify GPU access
 make up                  Start PrismML CUDA with Docker Compose or reuse healthy server
 make down                Stop only this repo's Compose container/network
 make compose-logs        Tail logs from our PrismML container
@@ -106,12 +107,17 @@ Requisitos externos: Docker Engine, plugin `docker compose` y NVIDIA
 Container Toolkit configurado para Docker. Verificación orientativa:
 
 ```bash
-docker compose version
-docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+make gpu-check
 ```
 
-La primera prueba descarga una imagen CUDA; ninguna acción del Makefile
-instala drivers ni modifica `daemon.json`. Consulta la
+El comando `make gpu-check` comprueba que Docker y Compose funcionan y
+ejecuta `nvidia-smi` en un **contenedor efímero sin permisos privilegiados**.
+Muestra GPU y VRAM; la primera vez puede descargar la imagen CUDA de prueba.
+`make up` ejecuta el mismo check **antes de crear un contenedor nuevo**,
+pero no lo repite al reutilizar un servidor sano ni cuando detecta un
+proceso PrismML huérfano. Esta prueba no certifica que los GGUF se carguen
+ni que PrismML funcione; eso lo valida después `make up`/`make smoke`.
+Ninguna acción instala drivers ni modifica `daemon.json`. Consulta la
 [guía oficial de NVIDIA](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
 si la prueba GPU falla.
 
