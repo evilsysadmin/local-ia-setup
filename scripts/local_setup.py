@@ -112,12 +112,27 @@ def write_config(config: dict, path: Path) -> str:
     return "Written"
 
 
+OPENCODE_V2_VERSION = re.compile(
+    r"(?:opencode\s+)?v?2\.\d+\.\d+(?:[-+][a-z0-9.-]+)?",
+    flags=re.IGNORECASE,
+)
+
+
+def valid_opencode_v2_version(output: str) -> bool:
+    """Parse official CLI output, including 'opencode v2.1.3'."""
+    return bool(OPENCODE_V2_VERSION.fullmatch(output.strip()))
+
+
 def opencode_v2_installed() -> bool:
     cmd = shutil.which("opencode")
     if not cmd:
         return False
-    result = subprocess.run([cmd, "--version"], capture_output=True, text=True, timeout=10, check=False)
-    return bool(re.search(r"\b2\.\d+", result.stdout))
+    try:
+        result = subprocess.run([cmd, "--version"], capture_output=True,
+                                text=True, timeout=10, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and valid_opencode_v2_version(result.stdout)
 
 
 def check_server_context(base_url: str, requested: int) -> None:
@@ -238,9 +253,13 @@ def completion(base: str, max_tokens: int) -> None:
 
 def main(argv: list[str]) -> None:
     if not argv:
-        raise SystemExit("Usage: local_setup.py {configure|doctor|status|completion} ...")
+        raise SystemExit("Usage: local_setup.py {configure|doctor|status|completion|check-opencode|ready} ...")
     cmd = argv[0]
-    if cmd == "configure" and len(argv) == 6:
+    if cmd == "check-opencode" and len(argv) == 1:
+        if not opencode_v2_installed():
+            raise RuntimeError("OpenCode V2 missing or unsupported version; check 'opencode --version' and PATH")
+        print("OpenCode V2: OK")
+    elif cmd == "configure" and len(argv) == 6:
         configure(validate_base_url(argv[1]), *map(int, argv[2:]))
     elif cmd == "doctor" and len(argv) == 4:
         doctor(validate_base_url(argv[1]), Path(argv[2]).expanduser(), int(argv[3]))

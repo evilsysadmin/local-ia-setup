@@ -82,7 +82,7 @@ case "$cmd" in
     command -v uv >/dev/null || fail 'uv is required'
     (cd "$BONSAI_DIR" && uv pip install --python .venv/bin/python '.[webui]') ;;
   install-opencode)
-    if command -v opencode >/dev/null 2>&1 && [[ "$(opencode --version)" =~ (^|[[:space:]])2[.] ]]; then
+    if python3 "$ROOT/scripts/local_setup.py" check-opencode >/dev/null 2>&1; then
       echo "OpenCode V2 already installed: $(opencode --version)"
     else
       command -v curl >/dev/null || fail 'curl missing'
@@ -112,9 +112,8 @@ case "$cmd" in
     check_numeric
     python3 "$ROOT/scripts/local_setup.py" configure "$(local_url)" "$BONSAI_CTX" "$BONSAI_OUTPUT" "$OPENCODE_KEEP" "$OPENCODE_BUFFER" ;;
   opencode)
-    command -v opencode >/dev/null || fail 'OpenCode missing; run make install-opencode'
-    [[ "$(opencode --version)" =~ (^|[[:space:]])2[.] ]] || fail 'This configuration requires OpenCode V2'
-    health || fail 'Backend not ready; run make server first'
+    python3 "$ROOT/scripts/local_setup.py" check-opencode || fail 'This configuration requires OpenCode V2'
+    health || fail 'Backend not ready; run make up first'
     exec opencode "$@" ;;
   browser) exec python3 "$ROOT/scripts/browser.py" "$(local_url)" ;;
   up|down|compose-logs|compose-ps|gpu-check)
