@@ -67,7 +67,7 @@ make install-opencode    Install OpenCode V2
 make server              Load CUDA runpaths and launch PrismML llama-server
 make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/models
 make configure-reasoning  Offline upgrade: medium default and deep (xhigh) variant
-make fix-compaction     Offline repair of tiny OpenCode compaction buffer (backs up config)
+make fix-compaction     Offline repair: buffer and 12K-token summary-only model (backs up config)
 make opencode            Start OpenCode (starts in the make working directory)
 make gpu-check           Run a disposable NVIDIA CUDA container to verify GPU access
 make up                  Start PrismML CUDA with Docker Compose or reuse healthy server
@@ -205,86 +205,52 @@ Los logs corresponden exclusivamente al contenedor Compose que
 pertenece a este repo (para modo nativo usa `make service-logs`).
 Límites: `TAIL=0..1000`, `FOLLOW=0|1`.
 
-## Evitar bucles de compactación con OpenCode V2
+## Reparar definitivamente la compactación de OpenCode V2
 
-Si aparece repetidamente **`Compaction summary reached the output token limit`**
-al llegar a ~30K/32K tokens, **no sigas escribiendo en esa sesión**.
-La anterior configuración de este repo usaba `compaction.buffer=4096`,
-que deja muy poco margen para generar un resumen completo.
-El nuevo valor predeterminado es **12288** para los 32768 tokens de contexto
-(`keep.tokens=2048`, `limit.output=4096`); las configuraciones
-nuevas se validan y no aceptan buffers insuficientes.
+Si ves repetidamente `Compaction summary reached the output token limit`,
+¡no sigas reenviando mensajes en la misma sesión! Observamos dos
+compactaciones truncadas exactamente en **4.096 tokens de salida**,
+incluso con solo 14K–15K tokens de entrada y con el buffer ya ampliado.
+El problema no era solo el buffer: el modelo usado para resumir tenía
+`limit.output=4096`, que OpenCode V2 también aplica al resumen.
+Aumentar `compaction.buffer` adelanta la compactación, **pero no amplía**
+ese techo de salida.
 
-Para reparar **sin servidor, red ni reinstalar OpenCode**:
+**Solución sin convertir todas las respuestas en monólogos:**
+`make fix-compaction` actualiza la configuración OpenCode gestionada por el
+repo y crea un alias `bonsai-local/bonsai-summary` que apunta al **mismo
+modelo PrismML/GGUF** y al mismo localhost, pero anuncia
+`limit.output=12288` en contextos de 32K.
+`agents.compaction.model` selecciona este alias **solo para los resúmenes**.
+El modelo conversacional `bonsai-local/bonsai` continúa con salida
+máxima de 4096 tokens; el modo habitual mantiene razonamiento `medium`.
 
 ```bash
+cd ~/Documents/repos/evilsysadmin/local-ia-setup
+git pull --ff-only
 make fix-compaction
 ```
 
-Solo aumenta `compaction.buffer` en la configuración global **gestionada
-por este repositorio**, conserva el resto de claves y realiza una copia
-privada `opencode.json.bak-...` con permisos 0600. No toca la base de datos
-de sesiones ni los pesos del modelo. Reinicia OpenCode después.
-Si tienes `OPENCODE_BUFFER=4096` definido explícitamente en tu `.env`,
-cámbialo a 12288 antes de ejecutar `make configure-opencode`;
-ese comando rechazará presupuestos insuficientes.
+La reparación es **offline, idempotente y con backup privado 0600**.
+Conserva preferencias, sesiones, historial, modelo y proceso Docker.
+Rechaza enlaces simbólicos, configuraciones ajenas y modelos de
+compactación personalizados para no pisar decisiones del usuario.
+Cierra y vuelve a abrir OpenCode para que cargue las nuevas referencias.
 
-**Sesión ya saturada:** un resumen de ~30K tokens aún puede superar el
-límite de 32K aunque aumentes el buffer para futuras llamadas. Exporta la
-sesión con `opencode session list` y
-`opencode session export SES_ID --sanitize` (elige dónde guardar la salida);
-inicia una sesión nueva sobre el mismo proyecto, consultando los archivos
-que el agente modificó y la transcripción anterior. La compactación es
-con pérdida: una sesión nueva puede ser lo más seguro para recuperar el
-flujo de trabajo, sin borrar las anteriores. El export puede incluir
-información del proyecto incluso con `--sanitize`; consérvalo localmente.
+`make configure-opencode` ahora también genera el alias y el agente
+de compactación si todavía no existe configuración. Los valores
+`OPENCODE_KEEP` y `OPENCODE_BUFFER` mantienen el control de cuándo
+se resume y qué contexto reciente se conserva; no deben confundirse
+con el máximo de tokens del resumen.
 
-## Razonamiento configurable de Bonsai 2 27B: medium / deep
-
-Bonsai razona en `xhigh` por defecto si el cliente no indica
-esfuerzo. Para preguntas sencillas puede gastar miles de tokens
-ocultos antes de responder. La integración V2 envía el valor
-**`reasoning_effort` dentro del cuerpo OpenAI-compatible de cada
-petición**. El perfil habitual es `medium`, mientras la variante
-`deep` envía `xhigh` a PrismML (el valor `high` no está soportado
-por Bonsai 2 en el backend actual). El modelo **no elige
-automáticamente** entre ambos niveles según la pregunta.
-
-Para activar el nuevo comportamiento en **tu configuración ya instalada**:
-
-```bash
-make configure-reasoning       # OFFLINE; modifica solo el modelo Bonsai
-```
-
-El comando conserva preferencias ajenas y el historial, y hace una
-copia privada de `~/.config/opencode/opencode.json` antes de modificarlo.
-No necesita reiniciar Docker, descargar modelos ni reinstalar OpenCode;
-reinicia el cliente OpenCode para asegurar que use la nueva configuración.
-`make configure-opencode` también genera ambos perfiles a partir de
-ahora, pero reconstruye la configuración global y exige un servidor
-activo.
-
-```bash
-make agent PROJECT=/ruta/tu-repo        # Plan: medium
-make agent-deep PROJECT=/ruta/tu-repo   # Plan: deep → xhigh
-make agent-build-deep PROJECT=/ruta/tu-repo  # Build: deep, rama limpia
-```
-
-En OpenCode V2 puedes escoger la variante `deep` (selector
-`bonsai-local/bonsai#deep` o `variant_cycle`) y volver a
-la configuración base `medium` sin reiniciar el servidor.
-El arranque `agent-deep` exige que hayas ejecutado antes
-`make configure-reasoning`, sin modificar configuraciones al vuelo.
-El nivel seleccionado se aplica a **peticiones nuevas**: las ya
-en ejecución conservan su configuración inicial.
-
-Los beneficios exactos en velocidad y calidad dependen del prompt:
-`medium` es una instrucción de menor razonamiento, no un límite
-duro de 2048 tokens. Para tareas complejas puedes seguir gastando
-más tiempo con `deep`; compara contadores con `make llama-status`
-y duración real. La variante de la UI web PrismML puede emplear
-otros presupuestos de razonamiento y no se modifica con estos
-comandos de OpenCode.
+**Recuperación de sesiones atascadas:** exporta primero la sesión con
+`opencode session list` y `opencode session export SES_ID --sanitize`
+(redirigiendo la salida a un archivo local privado). Tras la reparación,
+prueba una vez con la sesión original. Si falla de nuevo, inicia una nueva
+en el mismo repositorio; los archivos modificados y el historial guardado
+continúan intactos. El modelo puede seguir agotando 12K en casos difíciles,
+y se necesita una prueba real en Nobara para confirmar que la compactación
+termina con `finish_reason=stop`.
 
 ## OpenCode en cualquier proyecto
 

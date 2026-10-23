@@ -62,6 +62,8 @@ def validate_config(path: Path, upstream_id: str, base_url: str, requested_ctx: 
     ]
     if not isinstance(rules, list) or not all(rule in rules for rule in required):
         raise ValueError("Managed local-only provider policy missing; run make configure-opencode")
+    if not local_setup.has_summary_model(cfg):
+        raise ValueError("Compaction summary output is unsafe; run make fix-compaction")
     if require_deep and not local_setup.has_reasoning_profiles(cfg):
         raise ValueError("Bonsai deep variant missing; run make configure-reasoning first")
 

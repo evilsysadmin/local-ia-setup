@@ -18,6 +18,82 @@ from urllib.request import Request, urlopen
 PROVIDER = "bonsai-local"
 
 
+SUMMARY_MODEL = "bonsai-summary"
+SUMMARY_OUTPUT_MAX = 12_288
+
+
+def expected_summary_output(context: int) -> int:
+    """Output headroom for compaction, independent of normal chat replies."""
+    if type(context) is not int or not 8192 <= context <= 262144:
+        raise ValueError("Invalid context for Bonsai summary model")
+    return min(SUMMARY_OUTPUT_MAX, context // 2)
+
+
+def configure_summary_model(cfg: dict) -> dict:
+    """Alias the SAME PrismML GGUF with more output tokens for compaction only.
+
+    OpenCode V2 honors agents.compaction.model. Do not change the default
+    model's 4096 output cap; this avoids turning everyday answers into huge
+    thinking runs. A custom compaction agent is user-owned and not replaced.
+    """
+    if not isinstance(cfg, dict) or cfg.get("model") != f"{PROVIDER}/bonsai":
+        raise ValueError("Refusing to change non-managed Bonsai configuration")
+    provider = cfg.get("providers", {}).get(PROVIDER, {})
+    models = provider.get("models", {}) if isinstance(provider, dict) else {}
+    base = models.get("bonsai", {}) if isinstance(models, dict) else {}
+    if not isinstance(base, dict) or not isinstance(base.get("modelID"), str) or not base["modelID"]:
+        raise ValueError("Bonsai modelID missing from managed config")
+    limit = base.get("limit", {})
+    context = limit.get("context") if isinstance(limit, dict) else None
+    capacity = expected_summary_output(context)
+    alias = models.get(SUMMARY_MODEL)
+    if alias is not None and not isinstance(alias, dict):
+        raise ValueError("Existing summary model is invalid")
+    if alias is not None and alias.get("modelID") != base["modelID"]:
+        raise ValueError("Summary model alias points to a different upstream model; refusing override")
+    agents = cfg.setdefault("agents", {})
+    if not isinstance(agents, dict):
+        raise ValueError("Expected agents object in OpenCode configuration")
+    compaction = agents.setdefault("compaction", {})
+    if not isinstance(compaction, dict):
+        raise ValueError("Expected agents.compaction object")
+    configured = compaction.get("model")
+    target = f"{PROVIDER}/{SUMMARY_MODEL}"
+    if configured not in (None, target):
+        raise ValueError("A custom compaction agent model exists; refusing to replace it")
+    # Preserve non-conflicting custom agent and alias keys, but enforce
+    # output/context/model identity so OpenCode cannot silently use 4096 again.
+    summary = dict(alias or {})
+    summary["modelID"] = base["modelID"]
+    summary["name"] = "Bonsai 2 27B (compaction, larger output)"
+    summary["limit"] = {"context": context, "output": capacity}
+    summary["capabilities"] = base.get("capabilities", {"tools": True, "input": ["text"], "output": ["text"]})
+    summary_body = summary.get("body", {})
+    if not isinstance(summary_body, dict):
+        raise ValueError("Expected summary model.body object")
+    # Restrict unnecessary internal deliberation for routine summaries.
+    summary["body"] = {**summary_body, "reasoning_effort": "medium"}
+    models[SUMMARY_MODEL] = summary
+    compaction["model"] = target
+    return cfg
+
+
+def has_summary_model(cfg: dict) -> bool:
+    """Verify that compaction cannot silently fall back to 4096 tokens."""
+    try:
+        base = cfg["providers"][PROVIDER]["models"]["bonsai"]
+        summary = cfg["providers"][PROVIDER]["models"][SUMMARY_MODEL]
+        return (
+            cfg["agents"]["compaction"]["model"] == f"{PROVIDER}/{SUMMARY_MODEL}"
+            and summary["modelID"] == base["modelID"]
+            and summary["limit"]["context"] == base["limit"]["context"]
+            and summary["limit"]["output"] == expected_summary_output(base["limit"]["context"])
+            and summary["limit"]["output"] > base["limit"]["output"]
+        )
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return False
+
+
 def recommended_compaction_buffer(context: int, output: int, keep: int) -> int:
     """Reserve enough room for a useful summary, instead of truncating it.
 
@@ -190,7 +266,7 @@ def generate_config(upstream_model_id: str, context: int, output: int, keep: int
             {"action": "read", "resource": "*.env.example", "effect": "allow"},
         ],
     }
-    return apply_reasoning_profiles(cfg)
+    return configure_summary_model(apply_reasoning_profiles(cfg))
 
 
 def write_config(config: dict, path: Path) -> str:
@@ -227,9 +303,10 @@ def valid_opencode_v2_version(output: str) -> bool:
 
 
 def fix_compaction(path: Path | None = None) -> str:
-    """Repair only compaction.buffer in an existing repo-managed OpenCode config.
+    """Offline fix for both OpenCode compaction trigger and output token budget.
 
-    Does not need the server, does not touch sessions, and makes a private backup.
+    Makes one private backup if changes are needed. Does not touch sessions,
+    Docker, model weights, or ordinary chat output limit.
     """
     path = path or Path.home() / ".config/opencode/opencode.json"
     if path.is_symlink() or not path.is_file():
@@ -240,30 +317,31 @@ def fix_compaction(path: Path | None = None) -> str:
     cfg = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(cfg, dict) or cfg.get("model") != f"{PROVIDER}/bonsai":
         raise ValueError("Refusing to modify a config that is not the managed Bonsai model")
-    provider = cfg.get("providers", {}).get(PROVIDER, {})
-    if not isinstance(provider, dict):
-        raise ValueError("Managed Bonsai provider has an invalid configuration")
-    model = provider.get("models", {}).get("bonsai", {})
-    limits = model.get("limit", {}) if isinstance(model, dict) else {}
     comp = cfg.get("compaction")
     if not isinstance(comp, dict):
         raise ValueError("Managed OpenCode config has no compaction settings")
+    limits = cfg.get("providers", {}).get(PROVIDER, {}).get("models", {}).get("bonsai", {}).get("limit", {})
     keep_obj = comp.get("keep", {})
     keep = keep_obj.get("tokens") if isinstance(keep_obj, dict) else None
     context, output, buffer = limits.get("context"), limits.get("output"), comp.get("buffer")
     if type(buffer) is not int or buffer < 0:
         raise ValueError("Invalid existing compaction.buffer")
     required = recommended_compaction_buffer(context, output, keep)
-    if buffer >= required:
-        print(f"Compaction buffer already sufficient: {buffer} tokens (minimum {required})")
-        return "Unchanged"
-    cfg["compaction"]["buffer"] = required
-    status = write_config(cfg, path)
-    print(f"{status}: compaction.buffer {buffer} -> {required} in {path}")
-    print("No server, sessions or model configuration changed.")
-    print("Restart OpenCode to pick up the config. Already-overfull sessions")
-    print("may still fail; export them and continue in a new session if needed.")
-    return status
+    old_buffer = buffer
+    if buffer < required:
+        cfg["compaction"]["buffer"] = required
+    configure_summary_model(cfg)
+    state = write_config(cfg, path)
+    if state == "Written":
+        print(f"Fixed compaction buffer: {old_buffer} -> {cfg['compaction']['buffer']}")
+        print(f"Compaction-only model output: {cfg['providers'][PROVIDER]['models'][SUMMARY_MODEL]['limit']['output']} tokens")
+        print(f"Everyday Bonsai output remains: {output} tokens")
+        print(f"Private config backup created; original sessions remain untouched.")
+    else:
+        print("Compaction buffer and dedicated summary output model already configured.")
+    print("Restart OpenCode to load the repaired summary model; no Docker restart.")
+    print("If the old session still cannot compact, preserve/export it and start a new session.")
+    return state
 
 
 def opencode_v2_installed() -> bool:

@@ -115,6 +115,55 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.cfg(context=8192, output=4096, keep=2048, buffer=4096)
 
+    def test_dedicated_summary_alias_lifts_4096_ceiling_without_changing_chat(self):
+        cfg = self.cfg()
+        models = cfg["providers"]["bonsai-local"]["models"]
+        self.assertEqual(models["bonsai"]["limit"]["output"], 4096)
+        self.assertEqual(cfg["agents"]["compaction"]["model"], "bonsai-local/bonsai-summary")
+        self.assertEqual(models["bonsai-summary"]["modelID"], models["bonsai"]["modelID"])
+        self.assertEqual(models["bonsai-summary"]["limit"]["context"], 32768)
+        self.assertEqual(models["bonsai-summary"]["limit"]["output"], 12288)
+        self.assertEqual(models["bonsai-summary"]["body"]["reasoning_effort"], "medium")
+        self.assertTrue(mod.has_summary_model(cfg))
+        self.assertEqual(mod.expected_summary_output(16384), 8192)
+
+    def test_repair_existing_12288_buffer_when_summary_still_limited_to_4096(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "opencode.json"
+            cfg = self.cfg()
+            cfg["providers"]["bonsai-local"]["models"].pop("bonsai-summary")
+            cfg.pop("agents")
+            cfg["other"] = {"preserve": [1, 2, 3]}
+            path.write_text(json.dumps(cfg), encoding="utf-8")
+            self.assertFalse(mod.has_summary_model(cfg))
+            self.assertEqual(mod.fix_compaction(path), "Written")
+            data = json.loads(path.read_text())
+            self.assertTrue(mod.has_summary_model(data))
+            self.assertEqual(data["compaction"]["buffer"], 12288)
+            self.assertEqual(data["other"], {"preserve": [1, 2, 3]})
+            self.assertEqual(data["providers"]["bonsai-local"]["models"]["bonsai"]["limit"]["output"], 4096)
+            self.assertEqual(len(list(Path(tmp).glob("opencode.json.bak-*"))), 1)
+            self.assertEqual(mod.fix_compaction(path), "Unchanged")
+
+    def test_summary_alias_refuses_foreign_model_and_compaction_agent(self):
+        cfg = self.cfg()
+        cfg["agents"]["compaction"] = {"model": "other/local"}
+        with self.assertRaisesRegex(ValueError, "custom compaction agent"):
+            mod.configure_summary_model(cfg)
+        cfg = self.cfg()
+        cfg["providers"]["bonsai-local"]["models"]["bonsai-summary"]["modelID"] = "untrusted"
+        with self.assertRaisesRegex(ValueError, "different upstream model"):
+            mod.configure_summary_model(cfg)
+
+    def test_summary_alias_upgrade_preserves_unrelated_agent_fields(self):
+        cfg = self.cfg()
+        cfg["agents"]["build"] = {"temperature": 0.2}
+        cfg["agents"]["compaction"]["custom"] = "keep"
+        mod.configure_summary_model(cfg)
+        self.assertEqual(cfg["agents"]["build"], {"temperature": 0.2})
+        self.assertEqual(cfg["agents"]["compaction"]["custom"], "keep")
+        self.assertTrue(mod.has_summary_model(cfg))
+
     def test_avoid_compaction_summary_truncation(self):
         self.assertEqual(mod.recommended_compaction_buffer(32768, 4096, 2048), 12288)
         self.assertEqual(mod.recommended_compaction_buffer(49152, 4096, 2048), 18432)
