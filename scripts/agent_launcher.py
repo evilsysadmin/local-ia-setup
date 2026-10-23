@@ -40,7 +40,8 @@ def resolve_project(raw: str | None) -> Path:
     return Path(git("rev-parse", "--show-toplevel", cwd=path)).resolve(strict=True)
 
 
-def validate_config(path: Path, upstream_id: str, base_url: str, requested_ctx: int) -> None:
+def validate_config(path: Path, upstream_id: str, base_url: str, requested_ctx: int,
+                    require_deep: bool = False) -> None:
     if path.is_symlink() or not path.is_file():
         raise ValueError(f"OpenCode config missing or is a symlink: {path}; run make configure-opencode")
     cfg = json.loads(path.read_text(encoding="utf-8"))
@@ -61,6 +62,8 @@ def validate_config(path: Path, upstream_id: str, base_url: str, requested_ctx: 
     ]
     if not isinstance(rules, list) or not all(rule in rules for rule in required):
         raise ValueError("Managed local-only provider policy missing; run make configure-opencode")
+    if require_deep and not local_setup.has_reasoning_profiles(cfg):
+        raise ValueError("Bonsai deep variant missing; run make configure-reasoning first")
 
 
 def check_worktree(root: Path, mode: str) -> tuple[str, int]:
@@ -78,7 +81,7 @@ def check_worktree(root: Path, mode: str) -> tuple[str, int]:
 
 
 def preflight(project: str | None, mode: str, base_url: str, ctx: int,
-              config: Path | None = None) -> Path:
+              config: Path | None = None, require_deep: bool = False) -> Path:
     if mode not in {"plan", "build"}:
         raise ValueError("Mode must be 'plan' or 'build'")
     for name in OVERRIDES:
@@ -89,7 +92,7 @@ def preflight(project: str | None, mode: str, base_url: str, ctx: int,
     base = local_setup.validate_base_url(base_url)
     upstream = local_setup.wait_until_ready(base, timeout=12, interval=1)
     path = config or Path.home() / ".config/opencode/opencode.json"
-    validate_config(path, upstream, base, ctx)
+    validate_config(path, upstream, base, ctx, require_deep=require_deep)
     local_setup.check_server_context(base, ctx)
     if not shutil.which("opencode") or not local_setup.opencode_v2_installed():
         raise RuntimeError("OpenCode V2 not in PATH; run make install-opencode")
@@ -106,20 +109,32 @@ def preflight(project: str | None, mode: str, base_url: str, ctx: int,
 
 
 def main(argv: list[str]) -> None:
-    if len(argv) != 3:
-        raise ValueError("Usage: agent_launcher.py {plan|build} http://127.0.0.1:8080 32768; set PROJECT")
-    mode, url, context = argv
+    if len(argv) not in {3, 4}:
+        raise ValueError("Usage: agent_launcher.py {plan|build} LOCAL_URL CONTEXT [deep]; set PROJECT")
+    mode, url, context = argv[:3]
+    variant = argv[3] if len(argv) == 4 else None
+    if variant not in {None, "deep"}:
+        raise ValueError("Only the explicit 'deep' variant is supported")
     # Validate request and OpenCode availability before loading a large model.
     project = os.environ.get("PROJECT")
     root = resolve_project(project)
     check_worktree(root, mode)
+    if variant == "deep":
+        config_path = Path.home() / ".config/opencode/opencode.json"
+        if config_path.is_symlink() or not config_path.is_file():
+            raise ValueError("Bonsai config missing; run make configure-opencode")
+        if not local_setup.has_reasoning_profiles(json.loads(config_path.read_text(encoding="utf-8"))):
+            raise ValueError("Deep variant not configured; run make configure-reasoning")
     if not local_setup.opencode_v2_installed():
         raise RuntimeError("OpenCode V2 not found. Check PATH/version or run make install-opencode")
     compose_lifecycle.up(url, int(context), float(os.environ.get("BONSAI_READY_TIMEOUT", "120")),
                  Path(os.environ.get("BONSAI_DIR", str(Path.home() / "Apps/Bonsai-demo"))))
-    root = preflight(project, mode, url, int(context))
+    root = preflight(project, mode, url, int(context), require_deep=(variant == "deep"))
     os.chdir(root)
-    os.execvp("opencode", ["opencode", "--model", MODEL, "--agent", mode])
+    selection = MODEL + ("#deep" if variant == "deep" else "")
+    print(f"REASONING: {'xhigh (deep)' if variant == 'deep' else 'medium (default)'}",
+          flush=True)
+    os.execvp("opencode", ["opencode", "--model", selection, "--agent", mode])
 
 
 if __name__ == "__main__":

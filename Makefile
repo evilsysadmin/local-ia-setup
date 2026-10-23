@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode fix-compaction server webui opencode agent agent-build arena arena-check up down browser chat gpu-check compose-logs compose-ps native-up native-down status llama-status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode configure-reasoning fix-compaction server webui opencode agent agent-build agent-deep agent-build-deep arena arena-check up down browser chat gpu-check compose-logs compose-ps native-up native-down status llama-status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -22,6 +22,9 @@ install-opencode: ## Install OpenCode V2 (review upstream installer beforehand)
 configure-opencode: ## Read local /v1/models and configure local-only OpenCode V2
 	@./scripts/local-ia configure-opencode
 
+configure-reasoning: ## Offline: set Bonsai medium default + selectable deep (xhigh), preserve config
+	@./scripts/local-ia configure-reasoning
+
 fix-compaction: ## Repair local OpenCode compaction buffer OFFLINE; preserve sessions and backup config
 	@./scripts/local-ia fix-compaction
 
@@ -39,6 +42,12 @@ agent: ## Open Bonsai Plan in a project: make agent PROJECT=/path/to/repo
 
 agent-build: ## Open Bonsai Build (requires clean feature branch)
 	@./scripts/local-ia agent-build
+
+agent-deep: ## Open Bonsai Plan with deep (xhigh) effort in target Git repo
+	@./scripts/local-ia agent-deep
+
+agent-build-deep: ## Open Bonsai Build (xhigh, requires clean feature branch)
+	@./scripts/local-ia agent-build-deep
 
 arena: ## Generate an isolated coding challenge and instructions
 	@./scripts/local-ia arena

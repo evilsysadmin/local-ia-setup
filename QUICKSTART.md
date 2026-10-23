@@ -21,6 +21,7 @@ cd ~/Documents/repos/evilsysadmin/local-ia-setup
 git pull --ff-only
 make up                    # PrismML llama-server en Docker + readiness
 make configure-opencode    # solo una vez, o al cambiar modelo/contexto
+make configure-reasoning    # OFFLINE: cambia solo Bonsai a medium + variante deep
 make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
 ```
 
@@ -101,6 +102,26 @@ cd ~/Documents/repos/evilsysadmin/local-ia-setup
 make install-webui       # once, if not installed
 make webui               # http://127.0.0.1:9090; keep it on localhost
 ```
+
+## Perfiles de razonamiento (sin reiniciar el servidor)
+
+La configuración OpenCode V2 creada por `local-ia-setup` usa
+`medium` por defecto para evitar pensar miles de tokens ante
+consultas sencillas. `deep` envía `reasoning_effort: xhigh`.
+En instalaciones existentes:
+
+```bash
+make configure-reasoning   # actualiza solo el modelo Bonsai, backup privado
+make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
+make agent-deep PROJECT=~/Documents/repos/evilsysadmin/chess-studio
+```
+
+No cambia tu GGUF, contexto, cuantización ni Docker.
+En OpenCode también puedes alternar mediante el selector de variantes
+(`bonsai-local/bonsai#deep`), sin reiniciar el modelo. Reinicia
+OpenCode tras la primera configuración y deja que terminen las
+peticiones actuales. `high` puede provocar HTTP 500 con Bonsai 2:
+la variante deep usa **xhigh**.
 
 ## C. Trabajar en un repositorio con el agente local
 
