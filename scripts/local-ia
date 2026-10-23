@@ -109,6 +109,7 @@ case "$cmd" in
     export BONSAI_CODE_INTERPRETER=0 BONSAI_HOST=127.0.0.1
     exec ./scripts/start_openwebui.sh ;;
   fix-compaction) exec python3 "$ROOT/scripts/local_setup.py" fix-compaction ;;
+  configure-reasoning) exec python3 "$ROOT/scripts/local_setup.py" configure-reasoning ;;
   configure-opencode)
     check_numeric
     python3 "$ROOT/scripts/local_setup.py" configure "$(local_url)" "$BONSAI_CTX" "$BONSAI_OUTPUT" "$OPENCODE_KEEP" "$OPENCODE_BUFFER" ;;
@@ -126,10 +127,13 @@ case "$cmd" in
   native-up|native-down)
     check_numeric
     exec python3 "$ROOT/scripts/lifecycle.py" "${cmd#native-}" "$(local_url)" "$BONSAI_CTX" "$BONSAI_READY_TIMEOUT" "$BONSAI_DIR" ;;
-  agent|agent-build)
+  agent|agent-build|agent-deep|agent-build-deep)
     [[ "$#" -eq 0 ]] || fail "Set PROJECT=/path/to/repo; do not pass positional arguments"
     mode=plan
-    [[ "$cmd" == agent-build ]] && mode=build
+    [[ "$cmd" == agent-build || "$cmd" == agent-build-deep ]] && mode=build
+    if [[ "$cmd" == agent-deep || "$cmd" == agent-build-deep ]]; then
+      exec python3 "$ROOT/scripts/agent_launcher.py" "$mode" "$(local_url)" "$BONSAI_CTX" deep
+    fi
     exec python3 "$ROOT/scripts/agent_launcher.py" "$mode" "$(local_url)" "$BONSAI_CTX" ;;
   arena) exec python3 "$ROOT/scripts/arena.py" create ;;
   arena-check) exec python3 "$ROOT/scripts/arena.py" check ;;

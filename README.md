@@ -66,6 +66,7 @@ make install-webui       Install Open WebUI from upstream's pinned optional depe
 make install-opencode    Install OpenCode V2
 make server              Load CUDA runpaths and launch PrismML llama-server
 make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/models
+make configure-reasoning  Offline upgrade: medium default and deep (xhigh) variant
 make fix-compaction     Offline repair of tiny OpenCode compaction buffer (backs up config)
 make opencode            Start OpenCode (starts in the make working directory)
 make gpu-check           Run a disposable NVIDIA CUDA container to verify GPU access
@@ -79,6 +80,8 @@ make native-up           Optional systemd --user fallback (no Docker)
 make native-down         Stop only our systemd --user unit
 make agent PROJECT=...    Analyze an existing Git repo using local Bonsai + Plan
 make agent-build PROJECT=...  Edit in a clean feature branch with local Bonsai + Build
+make agent-deep PROJECT=...   Analyze with Bonsai xhigh reasoning
+make agent-build-deep PROJECT=...  Edit on a clean feature branch with xhigh
 make arena               Create isolated failing-code challenge
 make arena-check PROJECT=...  Evaluate five tests and detect tampering
 make webui               Launch WebUI with existing backend (won't start a second model)
@@ -235,6 +238,53 @@ que el agente modificó y la transcripción anterior. La compactación es
 con pérdida: una sesión nueva puede ser lo más seguro para recuperar el
 flujo de trabajo, sin borrar las anteriores. El export puede incluir
 información del proyecto incluso con `--sanitize`; consérvalo localmente.
+
+## Razonamiento configurable de Bonsai 2 27B: medium / deep
+
+Bonsai razona en `xhigh` por defecto si el cliente no indica
+esfuerzo. Para preguntas sencillas puede gastar miles de tokens
+ocultos antes de responder. La integración V2 envía el valor
+**`reasoning_effort` dentro del cuerpo OpenAI-compatible de cada
+petición**. El perfil habitual es `medium`, mientras la variante
+`deep` envía `xhigh` a PrismML (el valor `high` no está soportado
+por Bonsai 2 en el backend actual). El modelo **no elige
+automáticamente** entre ambos niveles según la pregunta.
+
+Para activar el nuevo comportamiento en **tu configuración ya instalada**:
+
+```bash
+make configure-reasoning       # OFFLINE; modifica solo el modelo Bonsai
+```
+
+El comando conserva preferencias ajenas y el historial, y hace una
+copia privada de `~/.config/opencode/opencode.json` antes de modificarlo.
+No necesita reiniciar Docker, descargar modelos ni reinstalar OpenCode;
+reinicia el cliente OpenCode para asegurar que use la nueva configuración.
+`make configure-opencode` también genera ambos perfiles a partir de
+ahora, pero reconstruye la configuración global y exige un servidor
+activo.
+
+```bash
+make agent PROJECT=/ruta/tu-repo        # Plan: medium
+make agent-deep PROJECT=/ruta/tu-repo   # Plan: deep → xhigh
+make agent-build-deep PROJECT=/ruta/tu-repo  # Build: deep, rama limpia
+```
+
+En OpenCode V2 puedes escoger la variante `deep` (selector
+`bonsai-local/bonsai#deep` o `variant_cycle`) y volver a
+la configuración base `medium` sin reiniciar el servidor.
+El arranque `agent-deep` exige que hayas ejecutado antes
+`make configure-reasoning`, sin modificar configuraciones al vuelo.
+El nivel seleccionado se aplica a **peticiones nuevas**: las ya
+en ejecución conservan su configuración inicial.
+
+Los beneficios exactos en velocidad y calidad dependen del prompt:
+`medium` es una instrucción de menor razonamiento, no un límite
+duro de 2048 tokens. Para tareas complejas puedes seguir gastando
+más tiempo con `deep`; compara contadores con `make llama-status`
+y duración real. La variante de la UI web PrismML puede emplear
+otros presupuestos de razonamiento y no se modifica con estos
+comandos de OpenCode.
 
 ## OpenCode en cualquier proyecto
 

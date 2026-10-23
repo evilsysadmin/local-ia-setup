@@ -63,6 +63,82 @@ def model_id(base_url: str) -> str:
     return models[0]["id"]
 
 
+REASONING_DEFAULT = "medium"
+REASONING_DEEP = "xhigh"
+
+
+def apply_reasoning_profiles(cfg: dict) -> dict:
+    """Set the PrismML request-body field; preserve unrelated user options.
+
+    OpenCode V2 model.body is forwarded to OpenAI-compatible endpoints.
+    V2 variants are a list whose selected body overrides the model's body.
+    Bonsai 2 rejects 'high'; the deep profile must use 'xhigh'.
+    """
+    if not isinstance(cfg, dict) or cfg.get("model") != f"{PROVIDER}/bonsai":
+        raise ValueError("Not a local-ia managed Bonsai model configuration")
+    provider = cfg.get("providers", {}).get(PROVIDER, {})
+    if not isinstance(provider, dict):
+        raise ValueError("Invalid managed provider")
+    models = provider.get("models", {})
+    model = models.get("bonsai", {}) if isinstance(models, dict) else {}
+    if not isinstance(model, dict) or not isinstance(model.get("modelID"), str):
+        raise ValueError("Managed Bonsai model is missing its upstream model ID")
+    if not isinstance(model.get("body", {}), dict):
+        raise ValueError("Invalid model.body")
+    variants = model.get("variants", [])
+    if not isinstance(variants, list) or any(
+        not isinstance(v, dict) or not isinstance(v.get("id"), str)
+        for v in variants
+    ):
+        raise ValueError("Expected OpenCode V2 variants array")
+    existing = [v for v in variants if v["id"] == "deep"]
+    if len(existing) > 1:
+        raise ValueError("Duplicate deep variants; resolve manually")
+    selected = existing[0] if existing else {"id": "deep"}
+    if not isinstance(selected.get("body", {}), dict):
+        raise ValueError("Invalid deep variant body")
+    model["body"] = {**model.get("body", {}), "reasoning_effort": REASONING_DEFAULT}
+    selected["body"] = {**selected.get("body", {}), "reasoning_effort": REASONING_DEEP}
+    if not existing:
+        variants.append(selected)
+    model["variants"] = variants
+    return cfg
+
+
+def has_reasoning_profiles(cfg: dict) -> bool:
+    """True only if both explicit request-body overrides are configured."""
+    try:
+        model = cfg["providers"][PROVIDER]["models"]["bonsai"]
+        return (
+            model["body"]["reasoning_effort"] == REASONING_DEFAULT
+            and any(
+                v.get("id") == "deep" and
+                isinstance(v.get("body"), dict) and
+                v["body"].get("reasoning_effort") == REASONING_DEEP
+                for v in model["variants"]
+            )
+        )
+    except (KeyError, TypeError, AttributeError):
+        return False
+
+
+def configure_reasoning(path: Path | None = None) -> str:
+    """Offline, additive V2 model config upgrade; leave existing sessions alone."""
+    path = path or Path.home() / ".config/opencode/opencode.json"
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"Managed OpenCode config absent or symlinked: {path}; "
+                         "run make configure-opencode when Bonsai is ready")
+    cfg = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(cfg, dict) or cfg.get("model") != f"{PROVIDER}/bonsai":
+        raise ValueError("Refusing to change a non-Bonsai OpenCode configuration")
+    apply_reasoning_profiles(cfg)
+    state = write_config(cfg, path)
+    print(f"{state}: Bonsai reasoning = medium by default, deep = xhigh ({path})")
+    print("No Docker restart, model reload, or session edits. Restart OpenCode to "
+          "pick up configuration changes; choose deep as a variant when needed.")
+    return state
+
+
 def generate_config(upstream_model_id: str, context: int, output: int, keep: int, buffer: int, base_url: str) -> dict:
     validate_base_url(base_url)
     if not upstream_model_id or not isinstance(upstream_model_id, str):
@@ -79,7 +155,7 @@ def generate_config(upstream_model_id: str, context: int, output: int, keep: int
             f"Compaction buffer {buffer} is too small for {context} context; "
             f"use OPENCODE_BUFFER={minimum_buffer} or larger."
         )
-    return {
+    cfg = {
         "$schema": "https://opencode.ai/config.json",
         "model": f"{PROVIDER}/bonsai",
         "providers": {
@@ -114,6 +190,7 @@ def generate_config(upstream_model_id: str, context: int, output: int, keep: int
             {"action": "read", "resource": "*.env.example", "effect": "allow"},
         ],
     }
+    return apply_reasoning_profiles(cfg)
 
 
 def write_config(config: dict, path: Path) -> str:
@@ -319,9 +396,11 @@ def completion(base: str, max_tokens: int) -> None:
 
 def main(argv: list[str]) -> None:
     if not argv:
-        raise SystemExit("Usage: local_setup.py {configure|doctor|status|completion|check-opencode|fix-compaction|ready} ...")
+        raise SystemExit("Usage: local_setup.py {configure|configure-reasoning|doctor|status|completion|check-opencode|fix-compaction|ready} ...")
     cmd = argv[0]
-    if cmd == "fix-compaction" and len(argv) == 1:
+    if cmd == "configure-reasoning" and len(argv) == 1:
+        configure_reasoning()
+    elif cmd == "fix-compaction" and len(argv) == 1:
         fix_compaction()
     elif cmd == "check-opencode" and len(argv) == 1:
         if not opencode_v2_installed():

@@ -19,6 +19,83 @@ class ConfigTests(unittest.TestCase):
         options.update(changes)
         return mod.generate_config(**options)
 
+
+    def test_bonsai_reasoning_medium_default_and_deep_xhigh_variant(self):
+        cfg = self.cfg()
+        model = cfg["providers"]["bonsai-local"]["models"]["bonsai"]
+        self.assertEqual(cfg["model"], "bonsai-local/bonsai")
+        self.assertEqual(model["modelID"], "Ternary-Bonsai-2-27B-PQ2_0.gguf")
+        self.assertEqual(model["body"]["reasoning_effort"], "medium")
+        self.assertEqual(model["variants"], [{
+            "id": "deep", "body": {"reasoning_effort": "xhigh"}
+        }])
+        self.assertTrue(mod.has_reasoning_profiles(cfg))
+        self.assertNotIn("high", [v["body"]["reasoning_effort"] for v in model["variants"]])
+
+    def test_reasoning_configure_upgrades_legacy_offline_and_keeps_custom_options(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "opencode.json"
+            cfg = self.cfg()
+            model = cfg["providers"]["bonsai-local"]["models"]["bonsai"]
+            model.pop("body")
+            model.pop("variants")
+            model["custom"] = "untouched"
+            model["settings"] = {"foo": "bar"}
+            cfg["customPreference"] = {"dark": True}
+            cfg["compaction"]["buffer"] = 12288
+            cfg["providers"]["bonsai-local"]["settings"]["baseURL"] = "http://127.0.0.1:8080/v1"
+            path.write_text(json.dumps(cfg), encoding="utf-8")
+            self.assertEqual(mod.configure_reasoning(path), "Written")
+            data = json.loads(path.read_text())
+            self.assertEqual(data["customPreference"], {"dark": True})
+            self.assertEqual(data["compaction"]["buffer"], 12288)
+            self.assertEqual(data["providers"]["bonsai-local"]["models"]["bonsai"]["custom"], "untouched")
+            self.assertEqual(data["providers"]["bonsai-local"]["models"]["bonsai"]["settings"], {"foo": "bar"})
+            self.assertTrue(mod.has_reasoning_profiles(data))
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            backups = list(Path(d).glob("opencode.json.bak-*"))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].stat().st_mode & 0o777, 0o600)
+            self.assertFalse(mod.has_reasoning_profiles(json.loads(backups[0].read_text())))
+            self.assertEqual(mod.configure_reasoning(path), "Unchanged")
+            self.assertEqual(len(list(Path(d).glob("opencode.json.bak-*"))), 1)
+
+    def test_reasoning_profiles_preserve_unrelated_variants_and_body(self):
+        cfg = self.cfg()
+        model = cfg["providers"]["bonsai-local"]["models"]["bonsai"]
+        model["body"]["trace"] = False
+        model["variants"].append({"id": "bespoke", "body": {"foo": "bar"}})
+        model["variants"][0]["settings"] = {"temperature": .2}
+        self.assertEqual(mod.apply_reasoning_profiles(cfg), cfg)
+        self.assertEqual(model["body"]["trace"], False)
+        self.assertEqual(model["variants"][0]["settings"], {"temperature": .2})
+        self.assertEqual(model["variants"][1], {"id": "bespoke", "body": {"foo": "bar"}})
+        self.assertEqual([v["id"] for v in model["variants"]].count("deep"), 1)
+
+    def test_reasoning_config_rejects_unmanaged_symlinks_and_malformed_variants(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "custom.json"
+            path.write_text('{"model":"remote/provider"}', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "non-Bonsai"):
+                mod.configure_reasoning(path)
+            link = Path(d) / "symlink.json"
+            link.symlink_to(path)
+            with self.assertRaisesRegex(ValueError, "symlinked"):
+                mod.configure_reasoning(link)
+            cfg = self.cfg()
+            cfg["providers"]["bonsai-local"]["models"]["bonsai"]["variants"] = {"deep": "xhigh"}
+            path.write_text(json.dumps(cfg), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "variants array"):
+                mod.configure_reasoning(path)
+            self.assertEqual(len(list(Path(d).glob("custom.json.bak-*"))), 0)
+
+    def test_reasoning_cli_configure_only_never_queries_server(self):
+        with patch.object(mod, "configure_reasoning", return_value="Unchanged") as configure, \
+             patch.object(mod, "model_id") as get_model:
+            mod.main(["configure-reasoning"])
+            configure.assert_called_once_with()
+            get_model.assert_not_called()
+
     def test_open_code_v2_schema_and_local_only(self):
         cfg = self.cfg()
         self.assertEqual(cfg["model"], "bonsai-local/bonsai")

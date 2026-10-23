@@ -101,6 +101,70 @@ class AgentLauncherTests(unittest.TestCase):
                         agent.main(["plan", "http://127.0.0.1:8080", "32768"])
                 start.assert_not_called()
 
+
+    def test_deep_variant_requires_configuration_before_any_gpu_start(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = repo(tmp)
+            p = Path(tmp) / ".config/opencode/opencode.json"
+            p.parent.mkdir(parents=True)
+            cfg = agent.local_setup.generate_config(
+                "bonsai-model", 32768, 4096, 2048, 12288, "http://127.0.0.1:8080")
+            model = cfg["providers"]["bonsai-local"]["models"]["bonsai"]
+            model.pop("body")
+            model.pop("variants")
+            p.write_text(json.dumps(cfg))
+            with patch.object(agent.Path, "home", return_value=Path(tmp)), \
+                 patch.object(agent, "resolve_project", return_value=root), \
+                 patch.object(agent, "check_worktree", return_value=("main", 0)), \
+                 patch.object(agent.compose_lifecycle, "up") as start:
+                with self.assertRaisesRegex(ValueError, "configure-reasoning"):
+                    agent.main(["plan", "http://127.0.0.1:8080", "32768", "deep"])
+                start.assert_not_called()
+
+    def test_deep_variant_passes_model_selector_to_opencode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = repo(tmp)
+            p = Path(tmp) / ".config/opencode/opencode.json"
+            p.parent.mkdir(parents=True)
+            cfg = agent.local_setup.generate_config(
+                "bonsai-model", 32768, 4096, 2048, 12288, "http://127.0.0.1:8080")
+            p.write_text(json.dumps(cfg))
+            with patch.object(agent.Path, "home", return_value=Path(tmp)), \
+                 patch.object(agent, "resolve_project", return_value=root), \
+                 patch.object(agent, "check_worktree", return_value=("main", 0)), \
+                 patch.object(agent.local_setup, "opencode_v2_installed", return_value=True), \
+                 patch.object(agent.compose_lifecycle, "up", return_value="reused") as start, \
+                 patch.object(agent, "preflight", return_value=root) as preflight, \
+                 patch.object(agent.os, "chdir"), \
+                 patch.object(agent.os, "execvp", side_effect=RuntimeError("intercepted")) as execvp:
+                with patch.dict("os.environ", {"PROJECT": str(root), "BONSAI_DIR": tmp,
+                                               "BONSAI_READY_TIMEOUT": "120"}):
+                    with self.assertRaisesRegex(RuntimeError, "intercepted"):
+                        agent.main(["plan", "http://127.0.0.1:8080", "32768", "deep"])
+                start.assert_called_once()
+                self.assertTrue(preflight.call_args.kwargs["require_deep"])
+                execvp.assert_called_once_with("opencode", [
+                    "opencode", "--model", "bonsai-local/bonsai#deep", "--agent", "plan",
+                ])
+
+    def test_default_model_keeps_original_selector_without_variant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = repo(tmp)
+            with patch.object(agent, "resolve_project", return_value=root), \
+                 patch.object(agent, "check_worktree", return_value=("main", 0)), \
+                 patch.object(agent.local_setup, "opencode_v2_installed", return_value=True), \
+                 patch.object(agent.compose_lifecycle, "up", return_value="reused"), \
+                 patch.object(agent, "preflight", return_value=root) as preflight, \
+                 patch.object(agent.os, "chdir"), \
+                 patch.object(agent.os, "execvp", side_effect=RuntimeError("intercepted")) as execvp:
+                with patch.dict("os.environ", {"PROJECT": str(root), "BONSAI_DIR": tmp}):
+                    with self.assertRaisesRegex(RuntimeError, "intercepted"):
+                        agent.main(["build", "http://127.0.0.1:8080", "32768"])
+                self.assertFalse(preflight.call_args.kwargs["require_deep"])
+                execvp.assert_called_once_with("opencode", [
+                    "opencode", "--model", "bonsai-local/bonsai", "--agent", "build",
+                ])
+
     def test_preflight_rejects_config_override_env(self):
         with patch.dict("os.environ", {"OPENCODE_CONFIG_CONTENT": "{}"}):
             with self.assertRaisesRegex(ValueError, "OPENCODE_CONFIG_CONTENT"):
