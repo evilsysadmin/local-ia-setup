@@ -69,6 +69,8 @@ make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/mo
 make opencode            Start OpenCode (starts in the make working directory)
 make gpu-check           Run a disposable NVIDIA CUDA container to verify GPU access
 make up                  Start PrismML CUDA with Docker Compose or reuse healthy server
+make browser             Open ready localhost PrismML UI in your default browser
+make chat                Start/reuse Bonsai then open its local browser UI
 make down                Stop only this repo's Compose container/network
 make compose-logs        Tail logs from our PrismML container
 make native-up           Optional systemd --user fallback (no Docker)
@@ -124,6 +126,7 @@ si la prueba GPU falla.
 ```bash
 cd ~/Documents/repos/evilsysadmin/local-ia-setup
 make up                  # Docker Compose + espera a que el modelo esté listo
+make browser             # abre http://127.0.0.1:8080 en el navegador
 make configure-opencode  # solo la primera vez o tras cambiar modelo/contexto
 make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
 make compose-logs        # últimas 100 líneas del contenedor
@@ -147,6 +150,11 @@ sandbox de OpenCode.
 mantienen el servicio opcional `systemd --user`; `make server`
 sigue arrancando PrismML en primer plano. No ejecutes varios modos a la vez
 porque compiten por el puerto 8080 y la GPU.
+
+Para el uso web sin OpenCode: `make chat` ejecuta `make up` y abre
+el navegador predeterminado. `make browser` solo abre la UI cuando
+Bonsai ya está listo, sin lanzar procesos nuevos; si no está disponible
+te recomienda iniciar el servidor. Respeta `BONSAI_PORT` y localhost.
 
 ## OpenCode en cualquier proyecto
 

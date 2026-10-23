@@ -116,6 +116,7 @@ case "$cmd" in
     [[ "$(opencode --version)" =~ (^|[[:space:]])2[.] ]] || fail 'This configuration requires OpenCode V2'
     health || fail 'Backend not ready; run make server first'
     exec opencode "$@" ;;
+  browser) exec python3 "$ROOT/scripts/browser.py" "$(local_url)" ;;
   up|down|compose-logs|gpu-check)
     check_numeric
     mode="$cmd"
