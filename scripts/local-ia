@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# The optional .env is user-owned, local-only, and must never be committed.
+if [[ -f "$ROOT/.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT/.env"
+fi
+BONSAI_DIR="${BONSAI_DIR:-$HOME/Apps/Bonsai-demo}"
+BONSAI_CTX="${BONSAI_CTX:-32768}"
+BONSAI_NGL="${BONSAI_NGL:-99}"
+BONSAI_MMPROJ_CPU="${BONSAI_MMPROJ_CPU:-1}"
+BONSAI_PORT="${BONSAI_PORT:-8080}"
+BONSAI_SLOTS="${BONSAI_SLOTS:-1}"
+BONSAI_OUTPUT="${BONSAI_OUTPUT:-4096}"
+OPENCODE_KEEP="${OPENCODE_KEEP:-2048}"
+OPENCODE_BUFFER="${OPENCODE_BUFFER:-4096}"
+export BONSAI_DIR BONSAI_CTX BONSAI_NGL BONSAI_MMPROJ_CPU BONSAI_PORT BONSAI_SLOTS BONSAI_OUTPUT OPENCODE_KEEP OPENCODE_BUFFER
+
+fail() { echo "ERROR: $*" >&2; exit 1; }
+need_bonsai() {
+  [[ -f "$BONSAI_DIR/scripts/start_llama_server.sh" ]] || fail "No Bonsai demo at $BONSAI_DIR. Run: make install-bonsai"
+}
+need_py() {
+  [[ -x "$BONSAI_DIR/.venv/bin/python" ]] || fail "No .venv in $BONSAI_DIR. Complete upstream ./setup.sh first."
+}
+local_url() { printf 'http://127.0.0.1:%s' "$BONSAI_PORT"; }
+health() { curl -fsS --connect-timeout 2 --max-time 4 "$(local_url)/health" >/dev/null 2>&1; }
+
+# CUDA runpath includes libraries installed via uv into the upstream demo venv.
+# Keep in this process: do not mutate linker config or global NVIDIA packages.
+load_cuda() {
+  need_bonsai; need_py
+  local site cuda cublas dep
+  site=$("$BONSAI_DIR/.venv/bin/python" -c 'import site; print(site.getsitepackages()[0])')
+  cuda="$site/nvidia/cuda_runtime/lib"
+  cublas="$site/nvidia/cublas/lib"
+  [[ -f "$cuda/libcudart.so.12" ]] || fail "Missing libcudart.so.12. Run: make install-cuda"
+  [[ -f "$cublas/libcublas.so.12" ]] || fail "Missing libcublas.so.12. Run: make install-cuda"
+  export LD_LIBRARY_PATH="$cuda:$cublas:$BONSAI_DIR/bin/cuda${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  local binary="$BONSAI_DIR/bin/cuda/llama-server"
+  [[ -x "$binary" ]] || fail "Missing PrismML CUDA llama-server: $binary"
+  dep=$(ldd "$binary" | grep 'not found' || true)
+  # libggml-cuda is dlopened and its deps don't necessarily appear in ldd llama-server.
+  while IFS= read -r -d '' so; do
+    dep+=$'\n'"$(ldd "$so" | grep 'not found' || true)"
+  done < <(find "$BONSAI_DIR/bin/cuda" -maxdepth 2 -name 'libggml-cuda.so*' -print0)
+  [[ -z "${dep//[$'\n'$'\t' ]/}" ]] || fail "Missing CUDA dependencies: $dep"
+}
+
+check_numeric() {
+  [[ "$BONSAI_CTX" =~ ^[0-9]+$ ]] || fail "BONSAI_CTX must be an integer"
+  [[ "$BONSAI_SLOTS" =~ ^[0-9]+$ ]] && (( BONSAI_SLOTS >= 1 )) || fail "BONSAI_SLOTS must be >=1"
+  (( BONSAI_CTX >= 8192 )) || fail "BONSAI_CTX must be >=8192 for agent use"
+  [[ "$BONSAI_PORT" =~ ^[0-9]+$ ]] && (( BONSAI_PORT >= 1 && BONSAI_PORT <= 65535 )) || fail "Invalid BONSAI_PORT"
+}
+
+cmd=${1:-help}; shift || true
+case "$cmd" in
+  help) sed -n '/^help:/,/^doctor:/p' "$ROOT/Makefile" | head -n -1; echo 'Use: make help';;
+  install-bonsai)
+    if [[ ! -d "$BONSAI_DIR/.git" ]]; then
+      [[ ! -e "$BONSAI_DIR" ]] || fail "$BONSAI_DIR exists but is not a git checkout. Inspect it manually."
+      command -v git >/dev/null || fail 'Install git first'
+      mkdir -p "$(dirname "$BONSAI_DIR")"
+      git clone https://github.com/PrismML-Eng/Bonsai-demo.git "$BONSAI_DIR"
+    fi
+    if [[ -f "$BONSAI_DIR/models/bonsai2-gguf/27B/Ternary-Bonsai-2-27B-PQ2_0.gguf" && -x "$BONSAI_DIR/bin/cuda/llama-server" ]]; then
+      echo 'Existing Bonsai model and binary found; skipping setup/download.'
+    else
+      (cd "$BONSAI_DIR" && BONSAI_OPENWEBUI=0 BONSAI_CODE_INTERPRETER=0 ./setup.sh)
+    fi ;;
+  install-cuda)
+    need_bonsai; need_py
+    command -v uv >/dev/null || fail 'uv is required: install uv with Nobara package manager first'
+    uv pip install --python "$BONSAI_DIR/.venv/bin/python" nvidia-cuda-runtime-cu12 nvidia-cublas-cu12
+    load_cuda
+    echo 'CUDA 12 runtime and cuBLAS dependencies: OK' ;;
+  install-webui)
+    need_bonsai; need_py
+    command -v uv >/dev/null || fail 'uv is required'
+    (cd "$BONSAI_DIR" && uv pip install --python .venv/bin/python '.[webui]') ;;
+  install-opencode)
+    if command -v opencode >/dev/null 2>&1 && [[ "$(opencode --version)" =~ (^|[[:space:]])2[.] ]]; then
+      echo "OpenCode V2 already installed: $(opencode --version)"
+    else
+      command -v curl >/dev/null || fail 'curl missing'
+      installer=$(mktemp)
+      trap 'rm -f "$installer"' EXIT
+      curl -fsSL https://opencode.ai/v2/install -o "$installer"
+      echo 'Running downloaded official OpenCode V2 installer...'
+      bash "$installer"
+      echo 'Open a new terminal (or run hash -r / exec "$SHELL") if PATH is stale.'
+    fi ;;
+  server)
+    check_numeric; need_bonsai; load_cuda
+    health && fail "A server already responds at $(local_url). Stop it first or use make status."
+    echo "Starting Bonsai: ctx=$BONSAI_CTX slots=$BONSAI_SLOTS gpu_layers=$BONSAI_NGL at $(local_url)"
+    cd "$BONSAI_DIR"
+    export PORT="$BONSAI_PORT" BONSAI_HOST='127.0.0.1'
+    exec ./scripts/start_llama_server.sh -np "$BONSAI_SLOTS" "$@" ;;
+  webui)
+    [[ "$BONSAI_PORT" == 8080 ]] || fail "Upstream Open WebUI only supports llama on port 8080; set BONSAI_PORT=8080"
+    need_bonsai; load_cuda
+    health || fail "Start make server in another terminal first; refusing implicit backend restart"
+    echo 'Starting local Open WebUI (http://127.0.0.1:9090) ...'
+    cd "$BONSAI_DIR"
+    export BONSAI_CODE_INTERPRETER=0 BONSAI_HOST=127.0.0.1
+    exec ./scripts/start_openwebui.sh ;;
+  configure-opencode)
+    check_numeric
+    python3 "$ROOT/scripts/local_setup.py" configure "$(local_url)" "$BONSAI_CTX" "$BONSAI_OUTPUT" "$OPENCODE_KEEP" "$OPENCODE_BUFFER" ;;
+  opencode)
+    command -v opencode >/dev/null || fail 'OpenCode missing; run make install-opencode'
+    [[ "$(opencode --version)" =~ (^|[[:space:]])2[.] ]] || fail 'This configuration requires OpenCode V2'
+    health || fail 'Backend not ready; run make server first'
+    exec opencode "$@" ;;
+  doctor) python3 "$ROOT/scripts/local_setup.py" doctor "$(local_url)" "$BONSAI_DIR" "$BONSAI_CTX" ;;
+  status) python3 "$ROOT/scripts/local_setup.py" status "$(local_url)" ;;
+  smoke) python3 "$ROOT/scripts/local_setup.py" completion "$(local_url)" 128 ;;
+  benchmark) python3 "$ROOT/scripts/local_setup.py" completion "$(local_url)" 768 ;;
+  *) fail "Unknown action: $cmd" ;;
+esac
