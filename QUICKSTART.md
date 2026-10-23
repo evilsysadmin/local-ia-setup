@@ -64,7 +64,42 @@ make install-webui       # once, if not installed
 make webui               # http://127.0.0.1:9090; keep it on localhost
 ```
 
-## C. Prefer a background service? (optional)
+## C. Trabajar en un repositorio con el agente local
+
+Sin cambiar de directorio, abre OpenCode apuntando a cualquier repositorio Git:
+
+```bash
+cd ~/Documents/repos/evilsysadmin/local-ia-setup
+make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
+```
+
+Esto comprueba que Bonsai está listo, el **modelo real** coincide con la
+configuración de OpenCode, el contexto anunciado es coherente y se está usando
+el proveedor `bonsai-local`. Abre OpenCode en la raíz del proyecto con
+`--model bonsai-local/bonsai --agent plan`, adecuado para analizar código.
+Permite consultar repositorios con cambios pendientes. **Plan no es un sandbox**:
+sus comandos siguen sujetos a permisos y a lo que autorices.
+
+Para permitir edición explícita, prepara una rama o worktree de trabajo limpio:
+
+```bash
+cd ~/Documents/repos/evilsysadmin/chess-studio
+git switch -c bonsai/primera-prueba  # solo si esa rama aún no existe
+
+cd ~/Documents/repos/evilsysadmin/local-ia-setup
+make agent-build PROJECT=~/Documents/repos/evilsysadmin/chess-studio
+```
+
+`agent-build` rechaza ramas `main`/`master`/`trunk`/`production`,
+`HEAD` separado y repositorios con archivos cambiados o sin seguimiento.
+No crea ramas, no hace `stash` y nunca ejecuta `git push` automáticamente.
+Estas protecciones solo se aplican **al abrir** el agente; el usuario puede
+cambiar de agente o ejecutar comandos dentro de la sesión. No sustituyen
+contenedores o worktrees aislados. Si el proyecto tiene sus propias
+configuraciones `opencode.json` o `.opencode/`, el lanzador muestra un aviso
+porque pueden modificar el comportamiento global.
+
+## D. Prefer a background service? (optional)
 
 Instead of leaving `make server` running, after stopping it with `Ctrl+C`:
 
