@@ -179,7 +179,7 @@ Foreground, systemd and Compose all use the same port and GPU; run **only one**.
 | `No llama backend available` in Open WebUI | Read Bonsai server logs; that message may hide a CUDA/dependency problem |
 | `request (...) exceeds context` / OpenCode compaction | Make sure `BONSAI_CTX` matches the active server and re-run `make configure-opencode`; use a new OpenCode session |
 | Port 8080 already bound | Reuse the running Bonsai server or stop it before switching modes |
-| OpenCode not found after install | Open a new shell, run `hash -r`, then inspect `type -a opencode` |
+| OpenCode V2 reported missing despite `opencode v2.x` | Update `local-ia-setup` with `git pull --ff-only`; the shared detector accepts `opencode v2.1.3`. Also try `hash -r` and inspect `type -a opencode` |
 
 **Operational checks:**
 

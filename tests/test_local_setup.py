@@ -56,6 +56,43 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(mod.write_config(self.cfg(), path), "Unchanged")
             self.assertEqual(len(list(Path(tmp).glob("opencode.json.bak-*"))), 1)
 
+
+    def test_opencode_cli_version_variants(self):
+        accepted = ["opencode v2.1.3", "opencode 2.1.3", "v2.1.3", "2.1.3",
+                    "opencode v2.1.3-beta.2"]
+        denied = ["opencode v1.9.99", "opencode v12.1.3", "opencode v20.1.3",
+                  "not opencode 2.1.3", "opencode version unknown", "", "v2.1",
+                  "opencode v2.1.3 ignored"]
+        for version in accepted:
+            with self.subTest(version=version):
+                self.assertTrue(mod.valid_opencode_v2_version(version))
+        for version in denied:
+            with self.subTest(version=version):
+                self.assertFalse(mod.valid_opencode_v2_version(version))
+
+    def test_opencode_v2_installed_checks_exit_code_and_fails_safely(self):
+        from subprocess import CompletedProcess, TimeoutExpired
+        with patch.object(mod.shutil, "which", return_value="/usr/bin/opencode"), \
+             patch.object(mod.subprocess, "run", return_value=CompletedProcess(
+                 ["opencode", "--version"], 0, "opencode v2.1.3\n", "")):
+            self.assertTrue(mod.opencode_v2_installed())
+        with patch.object(mod.shutil, "which", return_value="/usr/bin/opencode"), \
+             patch.object(mod.subprocess, "run", return_value=CompletedProcess(
+                 ["opencode", "--version"], 1, "opencode v2.1.3\n", "")):
+            self.assertFalse(mod.opencode_v2_installed())
+        with patch.object(mod.shutil, "which", return_value="/usr/bin/opencode"), \
+             patch.object(mod.subprocess, "run", side_effect=TimeoutExpired("opencode", 10)):
+            self.assertFalse(mod.opencode_v2_installed())
+        with patch.object(mod.shutil, "which", return_value=None):
+            self.assertFalse(mod.opencode_v2_installed())
+
+    def test_cli_shared_version_gate(self):
+        with patch.object(mod, "opencode_v2_installed", return_value=True):
+            mod.main(["check-opencode"])
+        with patch.object(mod, "opencode_v2_installed", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "unsupported version"):
+                mod.main(["check-opencode"])
+
     def test_model_id_from_local_api(self):
         with patch.object(mod, 'fetch_json', return_value={"data": [{"id": "bonsai-test"}]}):
             self.assertEqual(mod.model_id("http://127.0.0.1:8080"), "bonsai-test")
