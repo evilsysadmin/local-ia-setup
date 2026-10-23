@@ -7,9 +7,10 @@ Bonsai 2 27B PQ2_0 + CUDA + OpenCode V2 on **Nobara/Fedora**. Commands below run
 ## A. Bonsai ya instalado: Docker Compose
 
 Necesitas Docker Engine, Docker Compose v2 y el NVIDIA Container Toolkit.
-Antes del primer arranque verifica que Docker puede usar la GPU:
+Antes del primer arranque verifica que Docker puede usar la GPU desde el checkout:
 
 ```bash
+cd ~/Documents/repos/evilsysadmin/local-ia-setup
 make gpu-check
 ```
 
