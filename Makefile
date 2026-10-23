@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode configure-reasoning fix-compaction server webui opencode agent agent-build agent-deep agent-build-deep arena arena-check up down browser chat gpu-check compose-logs compose-ps native-up native-down status llama-status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode configure-reasoning fix-compaction compaction-check server webui opencode agent agent-build agent-deep agent-build-deep arena arena-check up down browser chat gpu-check compose-logs compose-ps native-up native-down status llama-status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -24,6 +24,9 @@ configure-opencode: ## Read local /v1/models and configure local-only OpenCode V
 
 configure-reasoning: ## Offline: set Bonsai medium default + selectable deep (xhigh), preserve config
 	@./scripts/local-ia configure-reasoning
+
+compaction-check: ## Read-only audit of summary alias, context, model and server; PROJECT=... optional
+	@./scripts/local-ia compaction-check
 
 fix-compaction: ## Repair local OpenCode compaction buffer OFFLINE; preserve sessions and backup config
 	@./scripts/local-ia fix-compaction
@@ -134,5 +137,5 @@ publish: verify ## Create evilsysadmin/local-ia-setup on GitHub (private by defa
 
 verify: test ## Local static validation
 	@bash -n scripts/local-ia scripts/publish.sh
-	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py scripts/agent_launcher.py scripts/arena.py scripts/lifecycle.py scripts/compose_lifecycle.py scripts/browser.py scripts/llama_status.py
+	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py scripts/agent_launcher.py scripts/arena.py scripts/lifecycle.py scripts/compose_lifecycle.py scripts/browser.py scripts/llama_status.py scripts/compaction_check.py
 	@echo 'Static checks: OK'

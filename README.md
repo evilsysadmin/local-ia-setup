@@ -68,6 +68,7 @@ make server              Load CUDA runpaths and launch PrismML llama-server
 make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/models
 make configure-reasoning  Offline upgrade: medium default and deep (xhigh) variant
 make fix-compaction     Offline repair: buffer and 12K-token summary-only model (backs up config)
+make compaction-check    Read-only config/server audit; PROJECT=... checks project overrides
 make opencode            Start OpenCode (starts in the make working directory)
 make gpu-check           Run a disposable NVIDIA CUDA container to verify GPU access
 make up                  Start PrismML CUDA with Docker Compose or reuse healthy server
@@ -230,6 +231,25 @@ cd ~/Documents/repos/evilsysadmin/local-ia-setup
 git pull --ff-only
 make fix-compaction
 ```
+
+Tras reparar, comprueba el contrato real **sin enviar prompts ni alterar sesiones**:
+
+```bash
+make compaction-check
+make compaction-check PROJECT=~/Documents/repos/evilsysadmin/chess-studio
+```
+
+Comprueba referencias normales/de resumen, salida de 4K frente a 12K,
+modelo compartido, buffer, contexto, `reasoning_effort=medium` del
+resumen y `/health`, `/v1/models`, `/props` cuando el servidor está
+activo. Si la API no está disponible, distingue explícitamente la
+validación estática de la comprobación en vivo. No inicia Docker, no
+genera inferencia y no imprime secretos ni prompts.
+
+Con `PROJECT` avisa si existen configuraciones OpenCode locales que
+podrían sobrescribir la global; estas opciones efectivas requieren
+revisión manual. **Una comprobación estática correcta no garantiza**
+que la compactación de una conversación larga termine bien.
 
 La reparación es **offline, idempotente y con backup privado 0600**.
 Conserva preferencias, sesiones, historial, modelo y proceso Docker.

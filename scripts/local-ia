@@ -108,6 +108,9 @@ case "$cmd" in
     cd "$BONSAI_DIR"
     export BONSAI_CODE_INTERPRETER=0 BONSAI_HOST=127.0.0.1
     exec ./scripts/start_openwebui.sh ;;
+  compaction-check)
+    check_numeric
+    exec python3 "$ROOT/scripts/compaction_check.py" "$(local_url)" "$BONSAI_CTX" ;;
   fix-compaction) exec python3 "$ROOT/scripts/local_setup.py" fix-compaction ;;
   configure-reasoning) exec python3 "$ROOT/scripts/local_setup.py" configure-reasoning ;;
   configure-opencode)
