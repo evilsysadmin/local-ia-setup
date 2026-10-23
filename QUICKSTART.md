@@ -99,7 +99,33 @@ contenedores o worktrees aislados. Si el proyecto tiene sus propias
 configuraciones `opencode.json` o `.opencode/`, el lanzador muestra un aviso
 porque pueden modificar el comportamiento global.
 
-## D. Prefer a background service? (optional)
+## D. Bonsai Arena: un examen práctico y reproducible 🌳
+
+Sin tocar Chess Studio ni otros repositorios reales, crea un mini-repositorio Git
+temporal con una función Python defectuosa, cinco tests y un AGENTS.md:
+
+```bash
+cd ~/Documents/repos/evilsysadmin/local-ia-setup
+make arena
+```
+
+El comando imprime una ruta nueva tipo `/tmp/bonsai-arena-XXXXXX` y las
+instrucciones exactas. La suite empieza fallando **deliberadamente**.
+Usa la ruta realmente impresa:
+
+```bash
+PROJECT=/tmp/bonsai-arena-XXXXXX make agent-build
+# En OpenCode: "Lee AGENTS.md, arregla stats.py y ejecuta los tests."
+PROJECT=/tmp/bonsai-arena-XXXXXX make arena-check
+```
+
+`arena-check` solo aprueba cuando los **cinco tests** pasan, `stats.py`
+ha cambiado, los tests y reglas originales siguen intactos y no aparecen
+archivos adicionales. El modelo no recibe acceso automático a tus juegos,
+y OpenCode sigue solicitando permisos según la configuración local. El
+directorio temporal permanece para que puedas revisar el resultado.
+
+## E. Prefer a background service? (optional)
 
 Instead of leaving `make server` running, after stopping it with `Ctrl+C`:
 
