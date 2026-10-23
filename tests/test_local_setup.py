@@ -63,6 +63,37 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 mod.model_id("http://127.0.0.1:8080")
 
+    def test_readiness_waits_for_model_load(self):
+        ticks = [0.0]
+        def clock():
+            return ticks[0]
+        def sleep(seconds):
+            ticks[0] += seconds
+        responses = [{"status": "loading model"}, {"status": "ok"}]
+        with patch.object(mod, 'fetch_json', side_effect=responses) as health, \
+             patch.object(mod, 'model_id', return_value='bonsai-test') as model:
+            result = mod.wait_until_ready("http://127.0.0.1:8080", timeout=10,
+                                          interval=2, clock=clock, sleeper=sleep)
+        self.assertEqual(result, 'bonsai-test')
+        self.assertEqual(health.call_count, 2)
+        model.assert_called_once()
+
+    def test_readiness_times_out_without_successful_health(self):
+        ticks = [0.0]
+        def clock():
+            return ticks[0]
+        def sleep(seconds):
+            ticks[0] += seconds
+        with patch.object(mod, 'fetch_json', return_value={"status": "loading model"}):
+            with self.assertRaisesRegex(RuntimeError, 'not ready after 5s'):
+                mod.wait_until_ready("http://127.0.0.1:8080", timeout=5,
+                                     interval=2, clock=clock, sleeper=sleep)
+        self.assertLessEqual(ticks[0], 5)
+
+    def test_readiness_rejects_invalid_timeout(self):
+        with self.assertRaises(ValueError):
+            mod.wait_until_ready("http://127.0.0.1:8080", timeout=0)
+
     def test_context_mismatch_rejected(self):
         with patch.object(mod, 'fetch_json', return_value={"default_generation_settings": {"n_ctx": 8192}}):
             with self.assertRaises(ValueError):

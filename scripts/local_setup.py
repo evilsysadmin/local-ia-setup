@@ -148,6 +148,37 @@ def configure(base: str, context: int, output: int, keep: int, buffer: int, path
     return cfg
 
 
+
+def wait_until_ready(base: str, timeout: float = 120.0, interval: float = 2.0,
+                     clock=None, sleeper=None) -> str:
+    """Wait until the *model* is ready; process startup alone is insufficient.
+
+    A 200 response with `status=loading` is not ready. Query model metadata only
+    once the health endpoint returns ready. Retry transient HTTP and JSON errors.
+    """
+    base = validate_base_url(base)
+    if not 0 < timeout <= 3600 or not 0 < interval <= 60:
+        raise ValueError("Ready timeout/interval out of range")
+    clock = clock or time.monotonic
+    sleeper = sleeper or time.sleep
+    deadline = clock() + timeout
+    last = "server not ready"
+    while True:
+        try:
+            info = fetch_json(f"{base}/health", timeout=5)
+            if info.get("status") == "ok":
+                current = model_id(base)
+                print(f"READY: {current} at {base}")
+                return current
+            last = f"/health status={info.get('status', 'unknown')}"
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            last = str(exc)
+        remaining = deadline - clock()
+        if remaining <= 0:
+            raise RuntimeError(f"Bonsai not ready after {timeout:g}s: {last}")
+        sleeper(min(interval, remaining))
+
+
 def gpu_info() -> None:
     nvidia = shutil.which("nvidia-smi")
     if not nvidia:
@@ -217,6 +248,8 @@ def main(argv: list[str]) -> None:
         status(validate_base_url(argv[1]))
     elif cmd == "completion" and len(argv) == 3:
         completion(validate_base_url(argv[1]), int(argv[2]))
+    elif cmd == "ready" and len(argv) == 3:
+        wait_until_ready(validate_base_url(argv[1]), float(argv[2]))
     else:
         raise SystemExit(f"Unknown command/args: {cmd}")
 
