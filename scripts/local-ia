@@ -15,7 +15,7 @@ BONSAI_SLOTS="${BONSAI_SLOTS:-1}"
 BONSAI_OUTPUT="${BONSAI_OUTPUT:-4096}"
 BONSAI_READY_TIMEOUT="${BONSAI_READY_TIMEOUT:-120}"
 OPENCODE_KEEP="${OPENCODE_KEEP:-2048}"
-OPENCODE_BUFFER="${OPENCODE_BUFFER:-4096}"
+OPENCODE_BUFFER="${OPENCODE_BUFFER:-12288}"
 export BONSAI_DIR BONSAI_CTX BONSAI_NGL BONSAI_MMPROJ_CPU BONSAI_PORT BONSAI_SLOTS BONSAI_OUTPUT BONSAI_READY_TIMEOUT OPENCODE_KEEP OPENCODE_BUFFER
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
@@ -108,6 +108,7 @@ case "$cmd" in
     cd "$BONSAI_DIR"
     export BONSAI_CODE_INTERPRETER=0 BONSAI_HOST=127.0.0.1
     exec ./scripts/start_openwebui.sh ;;
+  fix-compaction) exec python3 "$ROOT/scripts/local_setup.py" fix-compaction ;;
   configure-opencode)
     check_numeric
     python3 "$ROOT/scripts/local_setup.py" configure "$(local_url)" "$BONSAI_CTX" "$BONSAI_OUTPUT" "$OPENCODE_KEEP" "$OPENCODE_BUFFER" ;;

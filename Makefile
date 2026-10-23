@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down browser chat gpu-check compose-logs compose-ps native-up native-down status llama-status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode fix-compaction server webui opencode agent agent-build arena arena-check up down browser chat gpu-check compose-logs compose-ps native-up native-down status llama-status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -21,6 +21,9 @@ install-opencode: ## Install OpenCode V2 (review upstream installer beforehand)
 
 configure-opencode: ## Read local /v1/models and configure local-only OpenCode V2
 	@./scripts/local-ia configure-opencode
+
+fix-compaction: ## Repair local OpenCode compaction buffer OFFLINE; preserve sessions and backup config
+	@./scripts/local-ia fix-compaction
 
 server: ## Start Bonsai foreground, CUDA, single slot; Ctrl+C to stop
 	@./scripts/local-ia server

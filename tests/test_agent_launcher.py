@@ -59,7 +59,7 @@ class AgentLauncherTests(unittest.TestCase):
 
     def test_requires_local_provider_and_live_model(self):
         cfg = agent.local_setup.generate_config(
-            "bonsai-model", 32768, 4096, 2048, 4096, "http://127.0.0.1:8080")
+            "bonsai-model", 32768, 4096, 2048, 12288, "http://127.0.0.1:8080")
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "opencode.json"
             path.write_text(json.dumps(cfg))
@@ -111,7 +111,7 @@ class AgentLauncherTests(unittest.TestCase):
             root = repo(tmp)
             cfg = Path(tmp) / "opencode.json"
             good = agent.local_setup.generate_config(
-                "test", 32768, 4096, 2048, 4096, "http://127.0.0.1:8080")
+                "test", 32768, 4096, 2048, 12288, "http://127.0.0.1:8080")
             cfg.write_text(json.dumps(good))
             with patch.object(agent.local_setup, "wait_until_ready", return_value="test"), \
                     patch.object(agent.local_setup, "check_server_context") as context, \
