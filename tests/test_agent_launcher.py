@@ -73,6 +73,34 @@ class AgentLauncherTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "policy missing"):
                 agent.validate_config(path, "bonsai-model", "http://127.0.0.1:8080", 32768)
 
+
+    def test_main_launches_server_before_opencode_only_for_valid_project(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = repo(tmp)
+            with patch.object(agent, "resolve_project", return_value=root), \
+                 patch.object(agent, "check_worktree", return_value=("main", 0)), \
+                 patch.object(agent.local_setup, "opencode_v2_installed", return_value=True), \
+                 patch.object(agent.lifecycle, "up", return_value="started") as start, \
+                 patch.object(agent, "preflight", return_value=root), \
+                 patch.object(agent.os, "execvp", side_effect=RuntimeError("exec intercepted")):
+                with patch.dict("os.environ", {"PROJECT": str(root), "BONSAI_READY_TIMEOUT": "20",
+                                             "BONSAI_DIR": "/tmp/demo"}):
+                    with self.assertRaisesRegex(RuntimeError, "exec intercepted"):
+                        agent.main(["plan", "http://127.0.0.1:8080", "32768"])
+                start.assert_called_once_with("http://127.0.0.1:8080", 32768, 20.0, Path("/tmp/demo"))
+
+    def test_main_does_not_start_server_if_opencode_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = repo(tmp)
+            with patch.object(agent, "resolve_project", return_value=root), \
+                 patch.object(agent, "check_worktree", return_value=("main", 0)), \
+                 patch.object(agent.local_setup, "opencode_v2_installed", return_value=False), \
+                 patch.object(agent.lifecycle, "up") as start:
+                with patch.dict("os.environ", {"PROJECT": str(root)}):
+                    with self.assertRaisesRegex(RuntimeError, "OpenCode V2 not found"):
+                        agent.main(["plan", "http://127.0.0.1:8080", "32768"])
+                start.assert_not_called()
+
     def test_preflight_rejects_config_override_env(self):
         with patch.dict("os.environ", {"OPENCODE_CONFIG_CONTENT": "{}"}):
             with self.assertRaisesRegex(ValueError, "OPENCODE_CONFIG_CONTENT"):

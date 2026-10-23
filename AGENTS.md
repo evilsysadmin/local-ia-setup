@@ -14,3 +14,4 @@ This repo is a **reproducible local workstation setup**, not the PrismML upstrea
 - The `systemd --user` unit is optional and manual by default: no enable, linger, sudo, or changes to global units without an explicit user command.
 - The `agent` command defaults to OpenCode Plan; `agent-build` must reject protected branches and dirty worktrees. Never silently stash, reset, create branches, modify agent credentials, or autoapprove tool calls.
 - Keep Bonsai Arena isolated in a new temporary Git repo; never write arena fixtures into a user project. Unit tests must check that changing protected tests or extra files fails the score.
+- `make up` may start only the repo-managed systemd --user unit (never enable it at login), reuse a healthy Bonsai API, and must refuse orphan CUDA servers. `make down` must never signal manually started processes.
