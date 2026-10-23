@@ -27,10 +27,15 @@ make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
 `make agent` inicia el contenedor si hace falta. Para consultar y apagar:
 
 ```bash
+make browser          # abre la UI de PrismML si Bonsai está listo
 make compose-logs
 make status
 make down
 ```
+
+Atajo para abrirlo de una sola vez: `make chat` (inicia/reutiliza el
+servidor y abre tu navegador). `make browser` por sí solo no arranca
+nada, comprueba el modelo y utiliza `xdg-open` o `gio open` en Nobara.
 
 El contenedor usa el GGUF, binario CUDA y scripts de
 `~/Apps/Bonsai-demo` mediante **montaje de solo lectura**. La imagen

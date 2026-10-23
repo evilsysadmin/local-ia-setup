@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down gpu-check compose-logs native-up native-down status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down browser chat gpu-check compose-logs native-up native-down status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -45,6 +45,13 @@ arena-check: ## Score arena: PROJECT=/tmp/bonsai-arena-... make arena-check
 
 up: ## Start PrismML CUDA in Docker Compose (or reuse an existing local Bonsai)
 	@./scripts/local-ia up
+
+browser: ## Open ready PrismML UI in your desktop browser (no implicit startup)
+	@./scripts/local-ia browser
+
+chat: ## Start/reuse Bonsai and open its local browser chat
+	@./scripts/local-ia up
+	@./scripts/local-ia browser
 
 down: ## Stop only our Docker Compose stack (never kill a manual server)
 	@./scripts/local-ia down
@@ -109,5 +116,5 @@ publish: verify ## Create evilsysadmin/local-ia-setup on GitHub (private by defa
 
 verify: test ## Local static validation
 	@bash -n scripts/local-ia scripts/publish.sh
-	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py scripts/agent_launcher.py scripts/arena.py scripts/lifecycle.py scripts/compose_lifecycle.py
+	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py scripts/agent_launcher.py scripts/arena.py scripts/lifecycle.py scripts/compose_lifecycle.py scripts/browser.py
 	@echo 'Static checks: OK'
