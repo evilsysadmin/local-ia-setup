@@ -207,7 +207,7 @@ Foreground, systemd and Compose all use the same port and GPU; run **only one**.
 | `libcudart.so.12` or `libcublas.so.12` missing | `make install-cuda`; do not reinstall NVIDIA drivers |
 | `llama-server` answers but GPU VRAM ~200 MiB | `make doctor`; check the CUDA backend plugin with `ldd`, and `nvidia-smi` |
 | `No llama backend available` in Open WebUI | Read Bonsai server logs; that message may hide a CUDA/dependency problem |
-| `Compaction summary reached the output token limit` | Stop resending prompts; run `make fix-compaction` to increase the small 4K buffer offline (config backup). Restart OpenCode; if the existing ~30K/32K session stays wedged, export it and continue in a new session without deleting history |
+| `Compaction summary reached the output token limit` at ~4K out | Stop resending prompts. Run `make fix-compaction` to create a dedicated local compaction alias with 12K output (and repair the buffer), preserving the regular 4K chat limit and a private config backup. Restart OpenCode; export the old session before retrying, and start a new one if the same history remains wedged |
 | `request (...) exceeds context` / OpenCode compaction | Make sure `BONSAI_CTX` matches the active server and re-run `make configure-opencode`; use a new OpenCode session |
 | Port 8080 already bound | Reuse the running Bonsai server or stop it before switching modes |
 | OpenCode V2 reported missing despite `opencode v2.x` | Update `local-ia-setup` with `git pull --ff-only`; the shared detector accepts `opencode v2.1.3`. Also try `hash -r` and inspect `type -a opencode` |
