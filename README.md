@@ -66,6 +66,7 @@ make install-webui       Install Open WebUI from upstream's pinned optional depe
 make install-opencode    Install OpenCode V2
 make server              Load CUDA runpaths and launch PrismML llama-server
 make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/models
+make fix-compaction     Offline repair of tiny OpenCode compaction buffer (backs up config)
 make opencode            Start OpenCode (starts in the make working directory)
 make gpu-check           Run a disposable NVIDIA CUDA container to verify GPU access
 make up                  Start PrismML CUDA with Docker Compose or reuse healthy server
@@ -201,6 +202,40 @@ Los logs corresponden exclusivamente al contenedor Compose que
 pertenece a este repo (para modo nativo usa `make service-logs`).
 Límites: `TAIL=0..1000`, `FOLLOW=0|1`.
 
+## Evitar bucles de compactación con OpenCode V2
+
+Si aparece repetidamente **`Compaction summary reached the output token limit`**
+al llegar a ~30K/32K tokens, **no sigas escribiendo en esa sesión**.
+La anterior configuración de este repo usaba `compaction.buffer=4096`,
+que deja muy poco margen para generar un resumen completo.
+El nuevo valor predeterminado es **12288** para los 32768 tokens de contexto
+(`keep.tokens=2048`, `limit.output=4096`); las configuraciones
+nuevas se validan y no aceptan buffers insuficientes.
+
+Para reparar **sin servidor, red ni reinstalar OpenCode**:
+
+```bash
+make fix-compaction
+```
+
+Solo aumenta `compaction.buffer` en la configuración global **gestionada
+por este repositorio**, conserva el resto de claves y realiza una copia
+privada `opencode.json.bak-...` con permisos 0600. No toca la base de datos
+de sesiones ni los pesos del modelo. Reinicia OpenCode después.
+Si tienes `OPENCODE_BUFFER=4096` definido explícitamente en tu `.env`,
+cámbialo a 12288 antes de ejecutar `make configure-opencode`;
+ese comando rechazará presupuestos insuficientes.
+
+**Sesión ya saturada:** un resumen de ~30K tokens aún puede superar el
+límite de 32K aunque aumentes el buffer para futuras llamadas. Exporta la
+sesión con `opencode session list` y
+`opencode session export SES_ID --sanitize` (elige dónde guardar la salida);
+inicia una sesión nueva sobre el mismo proyecto, consultando los archivos
+que el agente modificó y la transcripción anterior. La compactación es
+con pérdida: una sesión nueva puede ser lo más seguro para recuperar el
+flujo de trabajo, sin borrar las anteriores. El export puede incluir
+información del proyecto incluso con `--sanitize`; consérvalo localmente.
+
 ## OpenCode en cualquier proyecto
 
 `make agent PROJECT=/ruta/al/repositorio` comprueba que la API local y el
@@ -276,7 +311,7 @@ startup (not copied into the unit); restart after modifications.
 | `BONSAI_OUTPUT` | `4096` | Model output allowance in OpenCode |
 | `BONSAI_READY_TIMEOUT` | `120` | Max seconds for `make ready` and service start/restart/enable |
 | `OPENCODE_KEEP` | `2048` | Recent tokens retained in compaction |
-| `OPENCODE_BUFFER` | `4096` | Token buffer; avoid V2 default 16K minimum |
+| `OPENCODE_BUFFER` | `12288` | Token buffer; avoid V2 default 16K minimum |
 
 `BONSAI_PORT=8080` is required for the upstream Open WebUI launcher, which hardcodes port 8080. A custom port is supported by our direct server/OpenCode commands, **not** by `make webui`.
 

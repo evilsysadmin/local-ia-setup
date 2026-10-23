@@ -15,7 +15,7 @@ spec.loader.exec_module(mod)
 class ConfigTests(unittest.TestCase):
     def cfg(self, **changes):
         options = dict(upstream_model_id="Ternary-Bonsai-2-27B-PQ2_0.gguf", context=32768,
-                       output=4096, keep=2048, buffer=4096, base_url="http://127.0.0.1:8080")
+                       output=4096, keep=2048, buffer=12288, base_url="http://127.0.0.1:8080")
         options.update(changes)
         return mod.generate_config(**options)
 
@@ -32,11 +32,60 @@ class ConfigTests(unittest.TestCase):
         self.assertNotIn("apiKey", json.dumps(cfg))
 
     def test_compaction_budget_contract(self):
-        cfg = self.cfg(context=16384, output=2048, keep=1024, buffer=2048)
-        self.assertEqual(cfg["compaction"]["buffer"], 2048)
+        cfg = self.cfg(context=16384, output=2048, keep=1024, buffer=6144)
+        self.assertEqual(cfg["compaction"]["buffer"], 6144)
         self.assertEqual(cfg["providers"]["bonsai-local"]["models"]["bonsai"]["limit"]["context"], 16384)
         with self.assertRaises(ValueError):
             self.cfg(context=8192, output=4096, keep=2048, buffer=4096)
+
+    def test_avoid_compaction_summary_truncation(self):
+        self.assertEqual(mod.recommended_compaction_buffer(32768, 4096, 2048), 12288)
+        self.assertEqual(mod.recommended_compaction_buffer(49152, 4096, 2048), 18432)
+        with self.assertRaisesRegex(ValueError, "Compaction buffer 4096 is too small"):
+            self.cfg(buffer=4096)
+        with self.assertRaisesRegex(ValueError, "cannot safely allocate"):
+            mod.recommended_compaction_buffer(8192, 4096, 2048)
+
+    def test_repair_old_global_config_offline_and_backup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "opencode.json"
+            cfg = self.cfg()
+            cfg["compaction"]["buffer"] = 4096
+            cfg["customPreference"] = {"doNotDelete": True}
+            path.write_text(json.dumps(cfg))
+            self.assertEqual(mod.fix_compaction(path), "Written")
+            changed = json.loads(path.read_text())
+            self.assertEqual(changed["compaction"]["buffer"], 12288)
+            self.assertEqual(changed["customPreference"], {"doNotDelete": True})
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            backups = list(Path(tmp).glob("opencode.json.bak-*"))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(json.loads(backups[0].read_text())["compaction"]["buffer"], 4096)
+            self.assertEqual(backups[0].stat().st_mode & 0o777, 0o600)
+            self.assertEqual(mod.fix_compaction(path), "Unchanged")
+            self.assertEqual(len(list(Path(tmp).glob("opencode.json.bak-*"))), 1)
+
+    def test_repair_only_repo_managed_config_and_no_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "external.json"
+            p.write_text('{"model":"other/provider"}')
+            with self.assertRaisesRegex(ValueError, "not the managed Bonsai"):
+                mod.fix_compaction(p)
+            link = Path(tmp) / "opencode.json"
+            link.symlink_to(p)
+            with self.assertRaisesRegex(ValueError, "symlinked"):
+                mod.fix_compaction(link)
+            self.assertEqual(p.read_text(), '{"model":"other/provider"}')
+
+    def test_repair_preserves_disabled_auto_and_stronger_buffer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "opencode.json"
+            cfg = self.cfg()
+            cfg["compaction"]["auto"] = False
+            cfg["compaction"]["buffer"] = 20000
+            p.write_text(json.dumps(cfg))
+            self.assertEqual(mod.fix_compaction(p), "Unchanged")
+            self.assertFalse(json.loads(p.read_text())["compaction"]["auto"])
 
     def test_reject_remote_endpoint(self):
         for endpoint in ["https://127.0.0.1:8080", "http://0.0.0.0:8080", "http://example.com:8080", "http://127.0.0.1:8080/path", "http://x:secret@localhost:8080"]:

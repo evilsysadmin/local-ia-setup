@@ -18,6 +18,26 @@ from urllib.request import Request, urlopen
 PROVIDER = "bonsai-local"
 
 
+def recommended_compaction_buffer(context: int, output: int, keep: int) -> int:
+    """Reserve enough room for a useful summary, instead of truncating it.
+
+    OpenCode V2 sizes summary output partly from the compaction buffer.
+    On a 32K context, 4K buffer repeatedly truncates summaries at ~3K.
+    We reserve 37.5% of context, with at least 1024 free for other input.
+    """
+    if any(type(v) is not int for v in (context, output, keep)):
+        raise ValueError("Context/output/keep must be integers")
+    room = context - output - keep - 1024
+    recommended = context * 3 // 8
+    if room < recommended or recommended < 4096:
+        raise ValueError(
+            f"Context {context} cannot safely allocate output={output}, "
+            f"keep={keep} and summary buffer={recommended}; "
+            "use a larger context or reduce output/keep."
+        )
+    return recommended
+
+
 def validate_base_url(value: str) -> str:
     parts = urlsplit(value)
     if parts.scheme != "http" or parts.hostname not in {"127.0.0.1", "localhost", "::1"}:
@@ -53,6 +73,12 @@ def generate_config(upstream_model_id: str, context: int, output: int, keep: int
         raise ValueError("Output budget must be positive and smaller than context")
     if keep < 0 or buffer < 0 or keep + buffer + output >= context:
         raise ValueError("Compaction keep + buffer + output must leave input room")
+    minimum_buffer = recommended_compaction_buffer(context, output, keep)
+    if buffer < minimum_buffer:
+        raise ValueError(
+            f"Compaction buffer {buffer} is too small for {context} context; "
+            f"use OPENCODE_BUFFER={minimum_buffer} or larger."
+        )
     return {
         "$schema": "https://opencode.ai/config.json",
         "model": f"{PROVIDER}/bonsai",
@@ -121,6 +147,46 @@ OPENCODE_V2_VERSION = re.compile(
 def valid_opencode_v2_version(output: str) -> bool:
     """Parse official CLI output, including 'opencode v2.1.3'."""
     return bool(OPENCODE_V2_VERSION.fullmatch(output.strip()))
+
+
+def fix_compaction(path: Path | None = None) -> str:
+    """Repair only compaction.buffer in an existing repo-managed OpenCode config.
+
+    Does not need the server, does not touch sessions, and makes a private backup.
+    """
+    path = path or Path.home() / ".config/opencode/opencode.json"
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(
+            f"OpenCode config missing, invalid or symlinked: {path}; "
+            "configure it with make configure-opencode when Bonsai is ready."
+        )
+    cfg = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(cfg, dict) or cfg.get("model") != f"{PROVIDER}/bonsai":
+        raise ValueError("Refusing to modify a config that is not the managed Bonsai model")
+    provider = cfg.get("providers", {}).get(PROVIDER, {})
+    if not isinstance(provider, dict):
+        raise ValueError("Managed Bonsai provider has an invalid configuration")
+    model = provider.get("models", {}).get("bonsai", {})
+    limits = model.get("limit", {}) if isinstance(model, dict) else {}
+    comp = cfg.get("compaction")
+    if not isinstance(comp, dict):
+        raise ValueError("Managed OpenCode config has no compaction settings")
+    keep_obj = comp.get("keep", {})
+    keep = keep_obj.get("tokens") if isinstance(keep_obj, dict) else None
+    context, output, buffer = limits.get("context"), limits.get("output"), comp.get("buffer")
+    if type(buffer) is not int or buffer < 0:
+        raise ValueError("Invalid existing compaction.buffer")
+    required = recommended_compaction_buffer(context, output, keep)
+    if buffer >= required:
+        print(f"Compaction buffer already sufficient: {buffer} tokens (minimum {required})")
+        return "Unchanged"
+    cfg["compaction"]["buffer"] = required
+    status = write_config(cfg, path)
+    print(f"{status}: compaction.buffer {buffer} -> {required} in {path}")
+    print("No server, sessions or model configuration changed.")
+    print("Restart OpenCode to pick up the config. Already-overfull sessions")
+    print("may still fail; export them and continue in a new session if needed.")
+    return status
 
 
 def opencode_v2_installed() -> bool:
@@ -253,9 +319,11 @@ def completion(base: str, max_tokens: int) -> None:
 
 def main(argv: list[str]) -> None:
     if not argv:
-        raise SystemExit("Usage: local_setup.py {configure|doctor|status|completion|check-opencode|ready} ...")
+        raise SystemExit("Usage: local_setup.py {configure|doctor|status|completion|check-opencode|fix-compaction|ready} ...")
     cmd = argv[0]
-    if cmd == "check-opencode" and len(argv) == 1:
+    if cmd == "fix-compaction" and len(argv) == 1:
+        fix_compaction()
+    elif cmd == "check-opencode" and len(argv) == 1:
         if not opencode_v2_installed():
             raise RuntimeError("OpenCode V2 missing or unsupported version; check 'opencode --version' and PATH")
         print("OpenCode V2: OK")
