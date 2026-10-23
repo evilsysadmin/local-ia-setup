@@ -15,6 +15,10 @@ jobs:
         env:
           BONSAI_DIR: /tmp/bonsai-fixture
         run: docker compose -f docker/compose.yaml config --quiet
+      - name: Validate direct Compose invocation without BONSAI_DIR
+        run: |
+          env -u BONSAI_DIR docker compose -f docker/compose.yaml config --format json > /tmp/local-ia-compose-config.json
+          python3 -c 'import json,os; d=json.load(open("/tmp/local-ia-compose-config.json")); mounts=d["services"]["bonsai"]["volumes"]; assert any(m["source"] == os.path.expanduser("~/Apps/Bonsai-demo") and m["read_only"] for m in mounts)'
       - name: No binary models or state in Git
         run: |
           if git ls-files | grep -E '\.(gguf|db|sqlite|log)$|(^|/)(\.env|\.venv|\.openwebui|models)/'; then

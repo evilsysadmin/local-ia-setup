@@ -14,6 +14,51 @@ class ComposeLifecycleTests(unittest.TestCase):
     BASE = "http://127.0.0.1:8080"
     DEMO = Path("/tmp/bonsai-demo-for-test")
 
+
+    def test_compose_up_streams_docker_progress(self):
+        with patch.object(ctl, "call_stream", return_value="") as streamed, \
+             patch.object(ctl, "call") as buffered:
+            self.assertEqual(ctl.compose("up", "-d", "--build", timeout=600), "")
+            streamed.assert_called_once_with(
+                ["docker", "compose", "-p", ctl.PROJECT, "-f", str(ctl.COMPOSE),
+                 "up", "-d", "--build"], timeout=600)
+            buffered.assert_not_called()
+
+    def test_streamed_docker_inherits_terminal_and_fails_loudly(self):
+        import subprocess
+        with patch.object(ctl.subprocess, "run",
+                          return_value=subprocess.CompletedProcess(["docker"], 0)) as run:
+            ctl.call_stream(["docker", "compose", "up"], timeout=60)
+            kwargs = run.call_args.kwargs
+            self.assertEqual(kwargs["timeout"], 60)
+            self.assertNotIn("capture_output", kwargs)
+            self.assertNotIn("stdout", kwargs)
+            self.assertNotIn("stderr", kwargs)
+        with patch.object(ctl.subprocess, "run",
+                          return_value=subprocess.CompletedProcess(["docker"], 17)):
+            with self.assertRaisesRegex(RuntimeError, "status 17"):
+                ctl.call_stream(["docker", "compose", "up"])
+
+    def test_compose_ps_is_safe_and_handles_build_before_container(self):
+        with patch.object(ctl, "docker_available"), \
+             patch.object(ctl, "existing_container", return_value=None), \
+             patch.object(ctl, "compose") as compose:
+            ctl.ps(self.DEMO)
+            compose.assert_not_called()
+        with patch.object(ctl, "docker_available"), \
+             patch.object(ctl, "existing_container", return_value="owned"), \
+             patch.object(ctl, "compose", return_value="bonsai running") as compose:
+            ctl.ps(self.DEMO)
+            compose.assert_called_once_with("ps", "-a", ctl.SERVICE)
+
+    def test_compose_default_path_uses_home_and_allows_custom_override(self):
+        source = (ROOT / "docker/compose.yaml").read_text(encoding="utf-8")
+        self.assertIn(
+            'source: "${BONSAI_DIR:-${HOME:?HOME is required}/Apps/Bonsai-demo}"',
+            source,
+        )
+        self.assertIn("create_host_path: false", source)
+
     def test_reuses_healthy_existing_server_without_docker(self):
         with patch.object(ctl.lifecycle, "listener_present", return_value=True), \
              patch.object(ctl.lifecycle, "verify_ready") as ready, \

@@ -73,6 +73,7 @@ make browser             Open ready localhost PrismML UI in your default browser
 make chat                Start/reuse Bonsai then open its local browser UI
 make down                Stop only this repo's Compose container/network
 make compose-logs        Tail logs from our PrismML container
+make compose-ps          Inspect our Compose container without env exports
 make native-up           Optional systemd --user fallback (no Docker)
 make native-down         Stop only our systemd --user unit
 make agent PROJECT=...    Analyze an existing Git repo using local Bonsai + Plan
@@ -129,6 +130,7 @@ make up                  # Docker Compose + espera a que el modelo esté listo
 make browser             # abre http://127.0.0.1:8080 en el navegador
 make configure-opencode  # solo la primera vez o tras cambiar modelo/contexto
 make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
+make compose-ps          # inspecciona el contenedor, sin exportar BONSAI_DIR
 make compose-logs        # últimas 100 líneas del contenedor
 make down                # para y desmonta SOLO este Compose
 ```
@@ -145,6 +147,15 @@ VRAM (por ejemplo, el PID 350930). Nunca se mata ese proceso: inspecciona
 el contenedor; no detiene procesos manuales ni unidades systemd. El acceso
 al socket Docker da permisos elevados en el host: este Compose no es un
 sandbox de OpenCode.
+
+El primer `make up` puede necesitar descargar/construir la imagen CUDA.
+La salida de Docker ahora se muestra **en directo**, para distinguir un
+pull/build de un arranque bloqueado. `make compose-ps` muestra el estado
+sin tener que exportar `BONSAI_DIR`; al ejecutar Compose directamente
+desde otra terminal, el volumen usa `$HOME/Apps/Bonsai-demo` por defecto,
+o un `BONSAI_DIR` explícito. Comprueba el checkout antes de levantar
+Compose fuera del Makefile: los overrides de `.env` que carga el wrapper
+no se aplican automáticamente a comandos `docker compose` directos.
 
 **Alternativas sin Docker:** `make native-up` / `make native-down`
 mantienen el servicio opcional `systemd --user`; `make server`

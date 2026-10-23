@@ -28,6 +28,7 @@ make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
 
 ```bash
 make browser          # abre la UI de PrismML si Bonsai está listo
+make compose-ps       # también cuando todavía se esté construyendo la imagen
 make compose-logs
 make status
 make down
@@ -36,6 +37,13 @@ make down
 Atajo para abrirlo de una sola vez: `make chat` (inicia/reutiliza el
 servidor y abre tu navegador). `make browser` por sí solo no arranca
 nada, comprueba el modelo y utiliza `xdg-open` o `gio open` en Nobara.
+
+En el primer arranque, el pull/build de la imagen CUDA se muestra en
+directo; `make compose-ps` da el estado del contenedor aunque no esté
+corriendo. Docker Compose también admite un `BONSAI_DIR` personalizado;
+sin él, su ruta predeterminada es `$HOME/Apps/Bonsai-demo`.
+Ten en cuenta que los overrides de `.env` son aplicados por
+`make up`, no necesariamente por una llamada manual a Docker.
 
 El contenedor usa el GGUF, binario CUDA y scripts de
 `~/Apps/Bonsai-demo` mediante **montaje de solo lectura**. La imagen

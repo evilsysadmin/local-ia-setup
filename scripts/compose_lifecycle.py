@@ -33,9 +33,23 @@ def call(args: list[str], timeout: int = 30) -> str:
     return result.stdout.strip()
 
 
+def call_stream(args: list[str], timeout: int = 600) -> str:
+    """Show Docker pull/build progress live instead of hiding it until timeout."""
+    print("Launching Docker Compose; pull/build logs will appear below:", flush=True)
+    result = subprocess.run(args, check=False, timeout=timeout)
+    if result.returncode:
+        raise RuntimeError(
+            f"Docker Compose exited with status {result.returncode}. "
+            "See the pull/build error above and rerun after fixing it."
+        )
+    return ""
+
+
 def compose(*args: str, timeout: int = 30) -> str:
-    return call(["docker", "compose", "-p", PROJECT, "-f", str(COMPOSE),
-                 *args], timeout=timeout)
+    command = ["docker", "compose", "-p", PROJECT, "-f", str(COMPOSE), *args]
+    if args and args[0] == "up":
+        return call_stream(command, timeout=timeout)
+    return call(command, timeout=timeout)
 
 
 def docker_available() -> None:
@@ -152,12 +166,13 @@ def up(base: str, context: int, timeout: float, demo_dir: Path) -> str:
     gpu_check()  # Fail early with an actionable GPU error before loading the model.
     try:
         compose("up", "-d", "--build", "--no-deps", SERVICE, timeout=600)
+        print("Docker startup command completed; checking the container and model readiness...", flush=True)
         if not existing_container(demo_dir):
             raise RuntimeError("Compose created no identifiable Bonsai container")
         lifecycle.verify_ready(base, context, timeout)
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError(f"PrismML Compose startup failed: {exc}. "
-                           "Inspect with make compose-logs and docker compose ps. "
+                           "Inspect with make compose-logs and make compose-ps. "
                            "Do not start a second GPU server.") from exc
     print("READY: PrismML llama-server is managed by Docker Compose.", flush=True)
     return "started"
@@ -174,6 +189,16 @@ def down(base: str, demo_dir: Path) -> str:
     return "stopped"
 
 
+def ps(demo_dir: Path) -> None:
+    """Inspect only our Compose container with the same ownership checks as down."""
+    docker_available()
+    if not existing_container(demo_dir.expanduser().resolve()):
+        print("No local-ia Bonsai Compose container has been created yet.")
+        print("A first-time Docker image pull/build may happen before creation.")
+        return
+    print(compose("ps", "-a", SERVICE))
+
+
 def logs(demo_dir: Path) -> None:
     docker_available()
     if not existing_container(demo_dir.expanduser().resolve()):
@@ -184,7 +209,7 @@ def logs(demo_dir: Path) -> None:
 
 def main(argv: list[str]) -> None:
     if len(argv) != 5:
-        raise ValueError("Usage: compose_lifecycle.py {up|down|logs|gpu-check} URL CTX TIMEOUT BONSAI_DIR")
+        raise ValueError("Usage: compose_lifecycle.py {up|down|logs|ps|gpu-check} URL CTX TIMEOUT BONSAI_DIR")
     command, base, context, timeout, demo = argv
     demo_dir = Path(demo)
     if command == "up":
@@ -195,6 +220,8 @@ def main(argv: list[str]) -> None:
         down(base, demo_dir)
     elif command == "logs":
         logs(demo_dir)
+    elif command == "ps":
+        ps(demo_dir)
     else:
         raise ValueError(f"Unknown command: {command}")
 
