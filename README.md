@@ -69,6 +69,8 @@ make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/mo
 make opencode            Start OpenCode (starts in the make working directory)
 make agent PROJECT=...    Analyze an existing Git repo using local Bonsai + Plan
 make agent-build PROJECT=...  Edit in a clean feature branch with local Bonsai + Build
+make arena               Create isolated failing-code challenge
+make arena-check PROJECT=...  Evaluate five tests and detect tampering
 make webui               Launch WebUI with existing backend (won't start a second model)
 make status              Show backend and active GPU compute processes
 make ready               Wait for /health=ok and valid /v1/models before returning
@@ -96,6 +98,17 @@ Revisa los detalles en el [Quickstart](QUICKSTART.md#c-trabajar-en-un-repositori
 
 No es un sandbox; las comprobaciones ocurren antes de iniciar OpenCode y las
 configuraciones locales de cada proyecto pueden alterar permisos o plugins.
+
+## Bonsai Arena — desafío práctico aislado
+
+`make arena` prepara un repositorio Git temporal en `/tmp/bonsai-arena-XXXXXX`
+con un bug real de Python, cinco tests y `AGENTS.md`. Te indica cómo entrar
+mediante `make agent-build` y puntuar la solución con
+`PROJECT=/tmp/bonsai-arena-... make arena-check`. Solo aprueba si todos los
+tests pasan sin modificar las pruebas ni introducir archivos inesperados.
+Es una **prueba local del agente**, no una prueba CI de inferencia CUDA.
+
+Consulta el [Quickstart](QUICKSTART.md) para los comandos completos.
 
 ## Optional systemd user service (no sudo)
 
