@@ -1,6 +1,6 @@
 # local-ia-setup 🌳
 
-> **🚀 Start here:** [QUICKSTART.md](QUICKSTART.md) — existing Nobara installation, clean install, OpenCode, and optional systemd user service.
+> **🚀 Start here:** [QUICKSTART.md](QUICKSTART.md) — Docker Compose, OpenCode, clean install, and optional native fallback.
 
 Reproducible, **local-only** AI coding workstation for Nobara/Fedora, NVIDIA Blackwell GPU and **PrismML Bonsai 2 27B PQ2_0** with OpenCode V2 and optional Open WebUI.
 
@@ -67,8 +67,11 @@ make install-opencode    Install OpenCode V2
 make server              Load CUDA runpaths and launch PrismML llama-server
 make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/models
 make opencode            Start OpenCode (starts in the make working directory)
-make up                  Safely start or reuse the Bonsai user service
-make down                Stop only Bonsai's managed systemd user unit
+make up                  Start PrismML CUDA with Docker Compose or reuse healthy server
+make down                Stop only this repo's Compose container/network
+make compose-logs        Tail logs from our PrismML container
+make native-up           Optional systemd --user fallback (no Docker)
+make native-down         Stop only our systemd --user unit
 make agent PROJECT=...    Analyze an existing Git repo using local Bonsai + Plan
 make agent-build PROJECT=...  Edit in a clean feature branch with local Bonsai + Build
 make arena               Create isolated failing-code challenge
@@ -90,29 +93,54 @@ make verify              Unit tests and syntax checks
 make publish             GitHub creation (private by default, requires gh CLI)
 ```
 
-## Arranque simplificado
+## Docker Compose: lanzar PrismML sin servicios systemd
 
-Si Bonsai ya está instalado en Nobara:
+Bonsai 2 requiere el **llama-server modificado de PrismML**, no Ollama
+ni un llama.cpp genérico. Docker Compose ejecuta directamente el
+`scripts/start_llama_server.sh` del checkout `~/Apps/Bonsai-demo`,
+montado **en solo lectura** (modelos GGUF y binario CUDA incluidos).
+La imagen usa `nvidia/cuda:12.8.1-runtime-ubuntu24.04` y aporta
+únicamente bibliotecas y utilidades del contenedor.
+
+Requisitos externos: Docker Engine, plugin `docker compose` y NVIDIA
+Container Toolkit configurado para Docker. Verificación orientativa:
 
 ```bash
-make up                 # arranca o reutiliza Bonsai y comprueba readiness
-make configure-opencode # primera vez o si cambia modelo/contexto
-make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
-make down               # solo detiene el servicio de este repositorio
+docker compose version
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 ```
 
-`make agent` y `make agent-build` inician el modelo automáticamente cuando
-sea necesario, **tras** comprobar que existe OpenCode V2 y que el proyecto
-Git es válido. El servicio gestionado es `systemd --user`, sin `sudo` ni
-autostart al iniciar sesión. Si ya hay un Bonsai sano en localhost se
-reutiliza. Un PID CUDA de Bonsai sin API operativa detiene el arranque para
-evitar consumir doble VRAM; no se envía señal ni se elimina ningún proceso
-ajeno. `make down` solo detiene la unidad creada por este repo; no para
-servidores lanzados manualmente ni deshabilita una preferencia de autostart
-configurada explícitamente.
+La primera prueba descarga una imagen CUDA; ninguna acción del Makefile
+instala drivers ni modifica `daemon.json`. Consulta la
+[guía oficial de NVIDIA](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+si la prueba GPU falla.
 
-Cuando hay problemas con CUDA o el servicio, consulta `make doctor`,
-`make status` y `make service-logs`.
+```bash
+cd ~/Documents/repos/evilsysadmin/local-ia-setup
+make up                  # Docker Compose + espera a que el modelo esté listo
+make configure-opencode  # solo la primera vez o tras cambiar modelo/contexto
+make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
+make compose-logs        # últimas 100 líneas del contenedor
+make down                # para y desmonta SOLO este Compose
+```
+
+`make agent` también hace el arranque bajo demanda. El puerto del modelo
+está publicado exclusivamente en `127.0.0.1`; no hay arranque automático
+al iniciar sesión ni descargas nuevas del GGUF. Si existe un servidor
+PrismML activo y sano, se reutiliza. Si se detecta un proceso antiguo
+**sin API funcional**, el arranque se bloquea para evitar duplicar uso de
+VRAM (por ejemplo, el PID 350930). Nunca se mata ese proceso: inspecciona
+`ps`, `ss` y sus logs y deténlo tú si corresponde.
+
+`make down` verifica etiquetas y montaje de solo lectura antes de apagar
+el contenedor; no detiene procesos manuales ni unidades systemd. El acceso
+al socket Docker da permisos elevados en el host: este Compose no es un
+sandbox de OpenCode.
+
+**Alternativas sin Docker:** `make native-up` / `make native-down`
+mantienen el servicio opcional `systemd --user`; `make server`
+sigue arrancando PrismML en primer plano. No ejecutes varios modos a la vez
+porque compiten por el puerto 8080 y la GPU.
 
 ## OpenCode en cualquier proyecto
 

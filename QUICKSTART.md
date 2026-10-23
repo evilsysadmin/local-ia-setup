@@ -2,40 +2,49 @@
 
 Bonsai 2 27B PQ2_0 + CUDA + OpenCode V2 on **Nobara/Fedora**. Commands below run on **your own Linux machine**; this repository does **not** include model weights, credentials or conversation data.
 
-> **Already installed Bonsai on this MSI?** Use [A](#a-bonsai-is-already-installed). You do **not** need to re-download ~8 GB of GGUF weights. For details and caveats, see [README](README.md).
+> **Already installed Bonsai on this MSI?** Use [A](#a-bonsai-ya-instalado-docker-compose). You do **not** need to re-download ~8 GB of GGUF weights. For details and caveats, see [README](README.md).
 
-## A. Bonsai ya instalado: un solo terminal
+## A. Bonsai ya instalado: Docker Compose
 
-Desde tu checkout existente, actualiza y arranca todo con:
+Necesitas Docker Engine, Docker Compose v2 y el NVIDIA Container Toolkit.
+Antes del primer arranque verifica que Docker puede usar la GPU:
+
+```bash
+docker compose version
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+```
+
+Con eso listo, desde el checkout:
 
 ```bash
 cd ~/Documents/repos/evilsysadmin/local-ia-setup
 git pull --ff-only
-
-make up                    # crea/inicia servicio de usuario si hace falta
-make configure-opencode    # primera vez, o tras cambiar contexto/modelo
+make up                    # PrismML llama-server en Docker + readiness
+make configure-opencode    # solo una vez, o al cambiar modelo/contexto
 make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
 ```
 
-`make up` comprueba que el servidor atiende y anuncia un modelo Bonsai
-compatible. Si no hay ninguno y no existe un proceso CUDA antiguo sin
-respuesta, instala y arranca nuestro servicio **systemd --user**. No
-necesitas dejar un terminal abierto. El arranque automático al iniciar
-sesión NO se habilita, salvo que decidas usar `make service-enable`.
-
-`make agent` también inicia el servidor cuando hace falta y abre OpenCode
-en el proyecto solicitado. Rechaza proyectos Git inválidos y comprueba
-primero que OpenCode V2 está disponible. Para detener únicamente el servicio
-gestionado aquí:
+`make agent` inicia el contenedor si hace falta. Para consultar y apagar:
 
 ```bash
+make compose-logs
+make status
 make down
 ```
 
-Si se detecta un proceso `llama-server` sin API activa (como el PID que
-solo consumía 184 MiB), el arranque se detiene sin matar ese proceso ni
-duplicar el consumo de memoria. Revisa `ps -fp PID`, `ss -ltnp` y los
-logs antes de detener manualmente el proceso antiguo.
+El contenedor usa el GGUF, binario CUDA y scripts de
+`~/Apps/Bonsai-demo` mediante **montaje de solo lectura**. La imagen
+contiene CUDA, pero no copia ni vuelve a descargar el modelo. El puerto
+8080 solo se publica en `127.0.0.1`. No hay autostart al iniciar sesión.
+
+Si `make up` detecta un `llama-server` huérfano (como el PID 350930),
+se negará a iniciar otro modelo para no consumir doble VRAM. No mata
+procesos manuales: comprueba `ps -fp PID`, `ss -ltnp` y sus logs,
+y detén tú el proceso antiguo si procede.
+
+Alternativas: `make native-up`/`make native-down` usan el servicio
+systemd opcional, y `make server` arranca el binario directamente en
+primer plano. **No mezcles modos**.
 
 ## B. New Nobara/Fedora machine
 
@@ -55,7 +64,7 @@ make doctor
 make up
 ```
 
-Open a **new shell** if the `opencode` command is missing after installation (or run `hash -r` to clear Bash's stale command cache). Then run `make configure-opencode` and `make agent PROJECT=...` as shown in [A](#a-bonsai-ya-instalado-un-solo-terminal).
+Open a **new shell** if the `opencode` command is missing after installation (or run `hash -r` to clear Bash's stale command cache). Then run `make configure-opencode` and `make agent PROJECT=...` as shown in [A](#a-bonsai-ya-instalado-docker-compose).
 
 For an optional browser UI, in a third terminal after Bonsai is ready:
 
@@ -126,7 +135,7 @@ archivos adicionales. El modelo no recibe acceso automático a tus juegos,
 y OpenCode sigue solicitando permisos según la configuración local. El
 directorio temporal permanece para que puedas revisar el resultado.
 
-## E. Prefer a background service? (optional)
+## E. Alternative: native systemd --user (without Docker)
 
 Instead of leaving `make server` running, after stopping it with `Ctrl+C`:
 
@@ -140,7 +149,7 @@ make smoke
 
 It will **not start at login** unless you explicitly opt in with `make service-enable`. To shut down: `make service-stop`. To disable login autostart: `make service-disable`. To remove the unit: `make service-uninstall`. Logs: `make service-logs`.
 
-The same port is used by foreground and background modes; run **only one**. The service is user-scoped; it does not enable lingering.
+Foreground, systemd and Compose all use the same port and GPU; run **only one**. The service is user-scoped; it does not enable lingering.
 
 ## Troubleshooting (the errors we actually hit)
 

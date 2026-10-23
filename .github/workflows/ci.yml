@@ -11,6 +11,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Unit and syntax checks
         run: make verify
+      - name: Validate Compose YAML (no GPU or daemon needed)
+        env:
+          BONSAI_DIR: /tmp/bonsai-fixture
+        run: docker compose -f docker/compose.yaml config --quiet
       - name: No binary models or state in Git
         run: |
           if git ls-files | grep -E '\.(gguf|db|sqlite|log)$|(^|/)(\.env|\.venv|\.openwebui|models)/'; then

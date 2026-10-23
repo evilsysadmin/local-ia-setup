@@ -1,0 +1,58 @@
+name: local-ia-bonsai
+services:
+  bonsai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: local-ia-bonsai:cuda12.8
+    init: true
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m
+    shm_size: 1gb
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      BONSAI_FAMILY: bonsai2
+      BONSAI_MODEL: 27B
+      BONSAI_CTX: "${BONSAI_CTX:-32768}"
+      BONSAI_NGL: "${BONSAI_NGL:-99}"
+      BONSAI_MMPROJ_CPU: "${BONSAI_MMPROJ_CPU:-1}"
+      BONSAI_HOST: "0.0.0.0"
+      PORT: "8080"
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    entrypoint: ["/bin/sh", "/bonsai/scripts/start_llama_server.sh"]
+    command: ["-np", "${BONSAI_SLOTS:-1}"]
+    volumes:
+      - type: bind
+        source: "${BONSAI_DIR:?Set BONSAI_DIR to the existing Bonsai-demo checkout}"
+        target: /bonsai
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:${BONSAI_PORT:-8080}:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 4 http://127.0.0.1:8080/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      start_period: 180s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      io.github.evilsysadmin.local-ia-setup.component: "bonsai-prisml"
