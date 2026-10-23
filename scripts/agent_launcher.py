@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import local_setup
+import lifecycle
 
 MODEL = "bonsai-local/bonsai"
 PROTECTED = frozenset({"main", "master", "trunk", "production"})
@@ -108,7 +109,15 @@ def main(argv: list[str]) -> None:
     if len(argv) != 3:
         raise ValueError("Usage: agent_launcher.py {plan|build} http://127.0.0.1:8080 32768; set PROJECT")
     mode, url, context = argv
-    root = preflight(os.environ.get("PROJECT"), mode, url, int(context))
+    # Validate request and OpenCode availability before loading a large model.
+    project = os.environ.get("PROJECT")
+    root = resolve_project(project)
+    check_worktree(root, mode)
+    if not local_setup.opencode_v2_installed():
+        raise RuntimeError("OpenCode V2 not found. Check PATH/version or run make install-opencode")
+    lifecycle.up(url, int(context), float(os.environ.get("BONSAI_READY_TIMEOUT", "120")),
+                 Path(os.environ.get("BONSAI_DIR", str(Path.home() / "Apps/Bonsai-demo"))))
+    root = preflight(project, mode, url, int(context))
     os.chdir(root)
     os.execvp("opencode", ["opencode", "--model", MODEL, "--agent", mode])
 

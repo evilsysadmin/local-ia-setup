@@ -67,6 +67,8 @@ make install-opencode    Install OpenCode V2
 make server              Load CUDA runpaths and launch PrismML llama-server
 make configure-opencode  Build ~/.config/opencode/opencode.json from live /v1/models
 make opencode            Start OpenCode (starts in the make working directory)
+make up                  Safely start or reuse the Bonsai user service
+make down                Stop only Bonsai's managed systemd user unit
 make agent PROJECT=...    Analyze an existing Git repo using local Bonsai + Plan
 make agent-build PROJECT=...  Edit in a clean feature branch with local Bonsai + Build
 make arena               Create isolated failing-code challenge
@@ -87,6 +89,30 @@ make service-uninstall   Safely remove generated user service
 make verify              Unit tests and syntax checks
 make publish             GitHub creation (private by default, requires gh CLI)
 ```
+
+## Arranque simplificado
+
+Si Bonsai ya está instalado en Nobara:
+
+```bash
+make up                 # arranca o reutiliza Bonsai y comprueba readiness
+make configure-opencode # primera vez o si cambia modelo/contexto
+make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
+make down               # solo detiene el servicio de este repositorio
+```
+
+`make agent` y `make agent-build` inician el modelo automáticamente cuando
+sea necesario, **tras** comprobar que existe OpenCode V2 y que el proyecto
+Git es válido. El servicio gestionado es `systemd --user`, sin `sudo` ni
+autostart al iniciar sesión. Si ya hay un Bonsai sano en localhost se
+reutiliza. Un PID CUDA de Bonsai sin API operativa detiene el arranque para
+evitar consumir doble VRAM; no se envía señal ni se elimina ningún proceso
+ajeno. `make down` solo detiene la unidad creada por este repo; no para
+servidores lanzados manualmente ni deshabilita una preferencia de autostart
+configurada explícitamente.
+
+Cuando hay problemas con CUDA o el servicio, consulta `make doctor`,
+`make status` y `make service-logs`.
 
 ## OpenCode en cualquier proyecto
 

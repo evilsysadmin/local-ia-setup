@@ -116,6 +116,9 @@ case "$cmd" in
     [[ "$(opencode --version)" =~ (^|[[:space:]])2[.] ]] || fail 'This configuration requires OpenCode V2'
     health || fail 'Backend not ready; run make server first'
     exec opencode "$@" ;;
+  up|down)
+    check_numeric
+    exec python3 "$ROOT/scripts/lifecycle.py" "$cmd" "$(local_url)" "$BONSAI_CTX" "$BONSAI_READY_TIMEOUT" "$BONSAI_DIR" ;;
   agent|agent-build)
     [[ "$#" -eq 0 ]] || fail "Set PROJECT=/path/to/repo; do not pass positional arguments"
     mode=plan

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
+.PHONY: help doctor install-bonsai install-cuda install-webui install-opencode configure-opencode server webui opencode agent agent-build arena arena-check up down status ready smoke benchmark service-install service-start service-stop service-restart service-enable service-disable service-status service-logs service-uninstall test verify publish
 
 help: ## Show commands
 	@awk 'BEGIN {FS=":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-21s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -42,6 +42,12 @@ arena: ## Generate an isolated coding challenge and instructions
 
 arena-check: ## Score arena: PROJECT=/tmp/bonsai-arena-... make arena-check
 	@./scripts/local-ia arena-check
+
+up: ## Start or reuse Bonsai via safe systemd --user management; wait for model readiness
+	@./scripts/local-ia up
+
+down: ## Stop ONLY local-ia's managed Bonsai service; leave manual servers alone
+	@./scripts/local-ia down
 
 status: ## Quick API and GPU status
 	@./scripts/local-ia status
@@ -91,5 +97,5 @@ publish: verify ## Create evilsysadmin/local-ia-setup on GitHub (private by defa
 
 verify: test ## Local static validation
 	@bash -n scripts/local-ia scripts/publish.sh
-	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py scripts/agent_launcher.py scripts/arena.py
+	@python3 -m py_compile scripts/local_setup.py scripts/user_service.py scripts/agent_launcher.py scripts/arena.py scripts/lifecycle.py
 	@echo 'Static checks: OK'

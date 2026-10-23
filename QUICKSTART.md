@@ -4,37 +4,38 @@ Bonsai 2 27B PQ2_0 + CUDA + OpenCode V2 on **Nobara/Fedora**. Commands below run
 
 > **Already installed Bonsai on this MSI?** Use [A](#a-bonsai-is-already-installed). You do **not** need to re-download ~8 GB of GGUF weights. For details and caveats, see [README](README.md).
 
-## A. Bonsai is already installed
+## A. Bonsai ya instalado: un solo terminal
 
-**Prerequisites:** `~/Apps/Bonsai-demo` already has the PQ2_0 model, its `.venv` and PrismML CUDA `llama-server`. Your NVIDIA driver should work (`nvidia-smi`). OpenCode V2 should be installed for the last step.
-
-**Terminal 1 — checkout and run Bonsai** (once cloned, use `git pull --ff-only` to update):
-
-```bash
-cd ~/Documents/repos/evilsysadmin
-git clone https://github.com/evilsysadmin/local-ia-setup.git
-cd local-ia-setup
-
-make doctor
-make install-cuda        # safe to repeat; fixes missing libcudart/cuBLAS in Bonsai's .venv
-make server              # foreground; leave this terminal open
-```
-
-**Terminal 2 — connect OpenCode:**
+Desde tu checkout existente, actualiza y arranca todo con:
 
 ```bash
 cd ~/Documents/repos/evilsysadmin/local-ia-setup
-make ready               # wait for loaded model, not merely an open port
-make configure-opencode  # reads live model ID and writes local-only V2 provider
-make smoke               # optional: direct API sanity check
+git pull --ff-only
 
-cd ~/Documents/repos/evilsysadmin/chess-studio
-opencode                 # start in the repo you want Bonsai to inspect
+make up                    # crea/inicia servicio de usuario si hace falta
+make configure-opencode    # primera vez, o tras cambiar contexto/modelo
+make agent PROJECT=~/Documents/repos/evilsysadmin/chess-studio
 ```
 
-If you previously cloned the setup repository, **do not clone again**: run `git pull --ff-only` there. If you already have a manual server on port 8080, **do not start a second**; use `make ready` and proceed to Terminal 2. To stop the foreground server, press `Ctrl+C` in Terminal 1.
+`make up` comprueba que el servidor atiende y anuncia un modelo Bonsai
+compatible. Si no hay ninguno y no existe un proceso CUDA antiguo sin
+respuesta, instala y arranca nuestro servicio **systemd --user**. No
+necesitas dejar un terminal abierto. El arranque automático al iniciar
+sesión NO se habilita, salvo que decidas usar `make service-enable`.
 
-`make configure-opencode` is necessary once and again after changing the context/model. It **backs up** an existing OpenCode config; it does **not** delete your sessions or credentials. OpenCode's generated provider policy allows only Bonsai local, but review any project-specific configs or plugins.
+`make agent` también inicia el servidor cuando hace falta y abre OpenCode
+en el proyecto solicitado. Rechaza proyectos Git inválidos y comprueba
+primero que OpenCode V2 está disponible. Para detener únicamente el servicio
+gestionado aquí:
+
+```bash
+make down
+```
+
+Si se detecta un proceso `llama-server` sin API activa (como el PID que
+solo consumía 184 MiB), el arranque se detiene sin matar ese proceso ni
+duplicar el consumo de memoria. Revisa `ps -fp PID`, `ss -ltnp` y los
+logs antes de detener manualmente el proceso antiguo.
 
 ## B. New Nobara/Fedora machine
 
@@ -51,10 +52,10 @@ make install-bonsai      # upstream setup; downloads model (~8 GB) on first run
 make install-cuda        # CUDA 12 runtime + cuBLAS in Bonsai's venv, not globally
 make install-opencode    # official OpenCode V2 installer; review it before running
 make doctor
-make server
+make up
 ```
 
-Open a **new shell** if the `opencode` command is missing after installation (or run `hash -r` to clear Bash's stale command cache). In a second terminal, follow [Terminal 2 above](#a-bonsai-is-already-installed), beginning at `make ready`.
+Open a **new shell** if the `opencode` command is missing after installation (or run `hash -r` to clear Bash's stale command cache). Then run `make configure-opencode` and `make agent PROJECT=...` as shown in [A](#a-bonsai-ya-instalado-un-solo-terminal).
 
 For an optional browser UI, in a third terminal after Bonsai is ready:
 
