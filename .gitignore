@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.gguf
+models/
+.openwebui/
+.hf_cache/
+*.sqlite*
+*.db
+*.log
+.cache/
+.DS_Store
