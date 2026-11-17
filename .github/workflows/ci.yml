@@ -1,7 +1,17 @@
 name: local-ia-setup CI
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
+
+# PR revisions supersede one another; protected-main runs remain independent.
+concurrency:
+  group: local-ia-setup-ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
