@@ -18,7 +18,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Unit and syntax checks
         run: make verify
       - name: Validate Compose YAML (no GPU or daemon needed)
