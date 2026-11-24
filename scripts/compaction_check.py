@@ -117,11 +117,7 @@ def check_server(base: str, cfg: dict, context: int) -> tuple[list[str], list[st
 
     try:
         props = local_setup.fetch_json(f"{base}/props", timeout=3)
-        generation = props.get("default_generation_settings")
-        candidates = [props.get("n_ctx_slot"), props.get("n_ctx")]
-        if isinstance(generation, dict):
-            candidates.append(generation.get("n_ctx"))
-        actual = next((n for n in candidates if type(n) is int and n > 0), None)
+        actual = local_setup.server_context_from_props(props)
         if actual is None:
             notes.append("Server context: not exposed by /props; inspect llama-server logs")
         elif actual < context:

@@ -32,6 +32,18 @@ class LlamaStatusTests(unittest.TestCase):
         self.assertEqual(ls.format_metric("llamacpp:kv_cache_usage_ratio", .25),
                          "KV cache usage: 25.0%")
 
+    def test_context_reader_uses_shared_slot_precedence_and_legacy_fallback(self):
+        payloads = [
+            ({"n_ctx_slot": 16384, "n_ctx": 65536}, 16384),
+            ({"n_ctx": 32768}, 32768),
+            ({"default_generation_settings": {"n_ctx": 24576}}, 24576),
+            ({"n_ctx_slot": True, "n_ctx": 8192}, 8192),
+            ({"n_ctx": "unknown"}, None),
+        ]
+        for props, expected in payloads:
+            with self.subTest(props=props), patch.object(ls.local_setup, "fetch_json", return_value=props):
+                self.assertEqual(ls.get_context(self.BASE), expected)
+
     def test_disabled_metrics_fails_softly(self):
         from urllib.error import HTTPError
         with patch.object(ls, "urlopen", side_effect=HTTPError(self.BASE, 501, "off", {}, None)):

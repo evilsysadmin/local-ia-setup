@@ -37,6 +37,20 @@ class CompactionCheckTests(unittest.TestCase):
         errors, _ = check.inspect_config(source, "http://127.0.0.1:8080", 32768)
         self.assertTrue(any("fix-compaction" in error for error in errors))
 
+    def test_live_context_precedence_matches_status_and_installation(self):
+        data = cfg()
+        def response(url, timeout=3):
+            if url.endswith("/health"):
+                return {"status": "ok"}
+            return {"n_ctx_slot": 16384, "n_ctx": 65536,
+                    "default_generation_settings": {"n_ctx": 65536}}
+        with patch.object(check.local_setup, "fetch_json", side_effect=response), \
+             patch.object(check.local_setup, "model_id", return_value="PrismML-Bonsai"):
+            errors, notes = check.check_server("http://127.0.0.1:8080", data, 32768)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("16,384", errors[0])
+        self.assertTrue(any("ready" in note for note in notes))
+
     def test_live_mismatch_and_context_mismatch_detected_without_completion(self):
         data = cfg()
         def fake(url, timeout=3):

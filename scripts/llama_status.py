@@ -80,13 +80,7 @@ def format_metric(name: str, value: float) -> str:
 def get_context(base: str) -> int | None:
     try:
         data = local_setup.fetch_json(f"{base}/props", timeout=3)
-        gen = data.get("default_generation_settings")
-        options = [data.get("n_ctx_slot"), data.get("n_ctx")]
-        if isinstance(gen, dict):
-            options.append(gen.get("n_ctx"))
-        for n in options:
-            if isinstance(n, int) and not isinstance(n, bool) and n > 0:
-                return n
+        return local_setup.server_context_from_props(data)
     except (ValueError, OSError, TypeError):
         pass
     return None

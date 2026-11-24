@@ -361,15 +361,29 @@ def opencode_v2_installed() -> bool:
     return result.returncode == 0 and valid_opencode_v2_version(result.stdout)
 
 
+def server_context_from_props(props: object) -> int | None:
+    """Read llama.cpp context consistently across supported /props formats.
+
+    A per-slot limit takes precedence over global and generation defaults.
+    Refuse booleans, floats and nonpositive values; unknown remains None.
+    """
+    if not isinstance(props, dict):
+        return None
+    generation = props.get("default_generation_settings")
+    candidates = [props.get("n_ctx_slot"), props.get("n_ctx")]
+    if isinstance(generation, dict):
+        candidates.append(generation.get("n_ctx"))
+    return next((value for value in candidates if type(value) is int and value > 0), None)
+
+
 def check_server_context(base_url: str, requested: int) -> None:
     try:
         props = fetch_json(f"{base_url}/props", timeout=3)
-        # llama.cpp versions vary; report only when a numeric value is exposed.
-        settings = props.get("default_generation_settings", {})
-        actual = settings.get("n_ctx") if isinstance(settings, dict) else None
-        if isinstance(actual, int) and actual > 0 and requested > actual:
+        # Prefer the actual per-slot limit over global/generation defaults.
+        actual = server_context_from_props(props)
+        if actual is not None and requested > actual:
             raise ValueError(f"OpenCode would announce {requested} tokens, but /props reports only {actual}")
-        if isinstance(actual, int) and actual > 0:
+        if actual is not None:
             print(f"llama-server context reported by /props: {actual}")
         else:
             print("INFO: /props does not report a comparable context value; verify n_ctx_slot in server log.")
