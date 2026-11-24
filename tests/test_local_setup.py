@@ -306,6 +306,26 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.wait_until_ready("http://127.0.0.1:8080", timeout=0)
 
+    def test_props_context_priority_and_invalid_values(self):
+        cases = [
+            ({"n_ctx_slot": 16384, "n_ctx": 65536, "default_generation_settings": {"n_ctx": 32768}}, 16384),
+            ({"n_ctx_slot": True, "n_ctx": 24576, "default_generation_settings": {"n_ctx": 8192}}, 24576),
+            ({"n_ctx_slot": 0, "n_ctx": -1, "default_generation_settings": {"n_ctx": 32768}}, 32768),
+            ({"n_ctx_slot": 1.5, "n_ctx": "16384", "default_generation_settings": {"n_ctx": False}}, None),
+            ({}, None),
+            (None, None),
+            ([], None),
+        ]
+        for payload, expected in cases:
+            with self.subTest(payload=payload):
+                self.assertEqual(mod.server_context_from_props(payload), expected)
+
+    def test_server_context_refuses_small_slot_even_with_large_generation_default(self):
+        props = {"n_ctx_slot": 8192, "default_generation_settings": {"n_ctx": 65536}}
+        with patch.object(mod, "fetch_json", return_value=props):
+            with self.assertRaisesRegex(ValueError, "/props reports only 8192"):
+                mod.check_server_context("http://127.0.0.1:8080", 32768)
+
     def test_context_mismatch_rejected(self):
         with patch.object(mod, 'fetch_json', return_value={"default_generation_settings": {"n_ctx": 8192}}):
             with self.assertRaises(ValueError):
